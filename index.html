@@ -638,7 +638,7 @@ temp.addEventListener('wheel',e=>{e.preventDefault();doZoom(e.deltaY>0?-.12:.12)
 new ResizeObserver(fitCanvas).observe(wrap);
 
 // ═══════════════════════════════════════
-// COLOR WHEEL (CSS-based, zero timing issues)
+// COLOR WHEEL
 // ═══════════════════════════════════════
 let cH=0, cS=1, cV=1;
 
@@ -663,26 +663,21 @@ function hexToRgb(hex){
 function updateColorUI(){
   const [r,g,b]=hsvToRgb(cH,cS,cV);
   const hex=rgbToHex(r,g,b);
-  // SV box hue
   const svBase=document.getElementById('svBaseHue');
   if(svBase) svBase.style.background=`hsl(${cH},100%,50%)`;
-  // SV cursor
   const svc=document.getElementById('svCursor');
   if(svc){svc.style.left=(cS*100)+'%';svc.style.top=((1-cV)*100)+'%';}
-  // Hue ring cursor
   const rad=(cH-90)*Math.PI/180;
-  const r2=87; // ring midpoint radius (174/2 - 11)
+  const r2=87;
   const cx=87+r2*Math.cos(rad), cy=87+r2*Math.sin(rad);
   const hc=document.getElementById('hueCursor');
   if(hc){hc.style.left=cx+'px';hc.style.top=cy+'px';hc.style.background=`hsl(${cH},100%,50%)`;}
-  // Slider thumbs
   const ht=document.getElementById('hueThumb'); if(ht) ht.style.left=(cH/360*100)+'%';
   const hv=document.getElementById('hueV'); if(hv) hv.textContent=Math.round(cH)+'°';
   const st2=document.getElementById('satThumb'); if(st2) st2.style.left=(cS*100)+'%';
   const sv=document.getElementById('satV'); if(sv) sv.textContent=Math.round(cS*100)+'%';
   const vt=document.getElementById('valThumb'); if(vt) vt.style.left=(cV*100)+'%';
   const vv=document.getElementById('valV'); if(vv) vv.textContent=Math.round(cV*100)+'%';
-  // Slider track backgrounds
   const satBg=document.getElementById('satTrackBg');
   if(satBg) satBg.style.background=`linear-gradient(to right,#888,hsl(${cH},100%,50%))`;
   const valBg=document.getElementById('valTrackBg');
@@ -717,13 +712,11 @@ function onHexInput(v){
   if(/^#[0-9a-fA-F]{6}$/.test(hex)) setColor(hex);
 }
 
-// Wheel drag
 let _wDrag=false,_svDrag=false,_hDrag=false,_sDrag=false,_vDrag=false;
 function _allUp(){_wDrag=_svDrag=_hDrag=_sDrag=_vDrag=false;}
 document.addEventListener('mouseup',_allUp);
 document.addEventListener('touchend',_allUp,{passive:true});
 
-// Wheel interactions — using wheelWrap element
 const wheelWrap=document.getElementById('wheelWrap');
 wheelWrap.addEventListener('mousedown',e=>{_wDrag=true;_setHue(e);});
 wheelWrap.addEventListener('mousemove',e=>{if(_wDrag){_setHue(e);}});
@@ -736,7 +729,6 @@ function _setHue(e){
   applyHSV();
 }
 
-// SV box
 const svBox=document.getElementById('svBox');
 svBox.addEventListener('mousedown',e=>{_svDrag=true;_setSV(e);});
 svBox.addEventListener('mousemove',e=>{if(_svDrag)_setSV(e);});
@@ -749,7 +741,6 @@ function _setSV(e){
   applyHSV();
 }
 
-// Slider helper
 function _trackPct(e,id){const r=document.getElementById(id).getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));}
 
 document.getElementById('hueTrack').addEventListener('mousedown',e=>{_hDrag=true;cH=_trackPct(e,'hueTrack')*360;applyHSV();});
@@ -761,7 +752,6 @@ document.addEventListener('mousemove',e=>{
 document.getElementById('satTrack').addEventListener('mousedown',e=>{_sDrag=true;cS=_trackPct(e,'satTrack');applyHSV();});
 document.getElementById('valTrack').addEventListener('mousedown',e=>{_vDrag=true;cV=_trackPct(e,'valTrack');applyHSV();});
 
-// Touch for sliders
 ['hueTrack','satTrack','valTrack'].forEach(id=>{
   document.getElementById(id).addEventListener('touchstart',e=>{
     e.preventDefault();
@@ -783,7 +773,6 @@ document.getElementById('valTrack').addEventListener('mousedown',e=>{_vDrag=true
   },{passive:false});
 });
 
-// PALETTE
 const PAL=['#000000','#1a1a1a','#555','#999','#ccc','#fff','#ff4d4d','#ff8800','#ffdd00','#44dd44','#00ccff','#4488ff','#9944ff','#ff44aa','#88ddff','#ffcc88','#8b4513','#006400','#00008b','#8b0000','#ff6347','#7fffd4','#ffd700','#ff69b4','#e8ff47','#4dffd6','#ff4d6d','#ff9f45','#a855f7','#06b6d4','#10b981','#f59e0b'];
 function buildPalette(id){
   const g=document.getElementById(id); if(!g)return; g.innerHTML='';
@@ -840,7 +829,6 @@ function undo(){if(!history.length)return showGToast('↩ Nothing to undo',false
 function redo(){if(!redoStack.length)return showGToast('↪ Nothing to redo',true);history.push(layers.map(l=>l.canvas.toDataURL()));restoreSnap(redoStack.pop());showGToast('↪ Redo',true);}
 function restoreSnap(snap){snap.forEach((src,i)=>{if(!layers[i])return;const img=new Image();img.onload=()=>{layers[i].ctx.clearRect(0,0,CW,CH);layers[i].ctx.drawImage(img,0,0);};img.src=src;});}
 
-// Gesture toast
 let _gtTimer;
 function showGToast(msg,isRedo){
   const t=document.getElementById('gestureToast');
@@ -849,7 +837,7 @@ function showGToast(msg,isRedo){
 }
 
 // ═══════════════════════════════════════
-// MULTI-FINGER GESTURES (2=undo, 3=redo)
+// MULTI-FINGER GESTURES
 // ═══════════════════════════════════════
 const _gPtrs=new Set();
 let _gActive=false,_gFired=false,_gPeak=0;
@@ -945,6 +933,10 @@ function onDown(e){
   }
 }
 
+// ═══════════════════════════════════════
+// BUG FIX: lastX/lastY now updated AFTER
+// freeStroke() so dist is never zero
+// ═══════════════════════════════════════
 function onMove(e){
   e.preventDefault();
   activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -955,12 +947,15 @@ function onMove(e){
   }
   const rawP=e.pressure===0?.5:e.pressure;
   smoothP(e.pointerType==='mouse'?.5:rawP); updatePMeter();
-  const pos=getPos(e); st.lastX=pos.x; st.lastY=pos.y;
+  const pos=getPos(e);
   if(st.recording&&st.currentStroke)st.currentStroke.points.push({x:pos.x,y:pos.y,t:Date.now()});
-  if(!st.drawing)return;
-  if(isShape()){tCtx.clearRect(0,0,CW,CH);setupCtxFlat(tCtx,false);drawShape(tCtx,st.startX,st.startY,pos.x,pos.y);return;}
-  if(st.tool==='spray')return;
-  if(st.tool==='gravity'){gravityPaint(pos);return;}
+  if(!st.drawing){st.lastX=pos.x;st.lastY=pos.y;return;}
+  if(isShape()){
+    tCtx.clearRect(0,0,CW,CH);setupCtxFlat(tCtx,false);drawShape(tCtx,st.startX,st.startY,pos.x,pos.y);
+    st.lastX=pos.x;st.lastY=pos.y;return;
+  }
+  if(st.tool==='spray'){st.lastX=pos.x;st.lastY=pos.y;return;}
+  if(st.tool==='gravity'){gravityPaint(pos);st.lastX=pos.x;st.lastY=pos.y;return;}
   const c=getCtx();if(!c)return;
   if(st.mirror){
     const pts=mirrorPts(pos.x,pos.y),src=mirrorPts(st.lastX,st.lastY);
@@ -968,6 +963,7 @@ function onMove(e){
   } else {
     setupCtx(c,st.tool==='eraser'); freeStroke(c,pos); c.beginPath(); c.moveTo(pos.x,pos.y);
   }
+  st.lastX=pos.x;st.lastY=pos.y; // ← FIXED: update AFTER drawing
 }
 
 function onUp(e){
@@ -995,9 +991,6 @@ function isShape(){return['line','rect','circle','triangle','arrow','star'].incl
 // ═══════════════════════════════════════
 // FREEHAND STROKES
 // ═══════════════════════════════════════
-
-// Persistent per-stroke last positions for multi-strand tools
-// Key = strand index, value = {x,y}
 const _strandLast = {};
 
 function freeStroke(c, pos){
@@ -1007,7 +1000,6 @@ function freeStroke(c, pos){
 
   switch(st.tool){
 
-    // ── PEN: smooth Bézier quadratic curve ──
     case 'pen':{
       _pts.push({x:pos.x, y:pos.y});
       if(_pts.length > 4) _pts.shift();
@@ -1027,22 +1019,16 @@ function freeStroke(c, pos){
       break;
     }
 
-    // ── PENCIL: 3 continuous fiber strands + grain particles ──
     case 'pencil':{
-      // Only draw if mouse actually moved (prevents single-click dots)
       if(dist < 0.5) break;
-
       const gOp = Math.min(0.6, pOpac * 0.45);
       const thin = Math.max(0.5, pSize * 0.4);
-
-      // 3 offset strands — each is a continuous line segment
       const offsets = [
         {ox: -thin*0.9, oy: -thin*0.3},
         {ox:  0,        oy:  0},
         {ox:  thin*0.7, oy:  thin*0.5},
       ];
       offsets.forEach((o, i) => {
-        // Use persistent last position so strands are continuous
         const lx = (_strandLast[i]?.x ?? st.lastX) + o.ox;
         const ly = (_strandLast[i]?.y ?? st.lastY) + o.oy;
         c.strokeStyle = hexA(st.color, gOp * (0.65 + i * 0.18));
@@ -1055,8 +1041,6 @@ function freeStroke(c, pos){
         c.stroke();
         _strandLast[i] = {x: pos.x, y: pos.y};
       });
-
-      // Grain particles — only scattered dots along path, not at a single point
       c.fillStyle = hexA(st.color, gOp * 0.35);
       const steps = Math.max(1, Math.floor(dist / 3));
       for(let i = 0; i < steps; i++){
@@ -1072,36 +1056,26 @@ function freeStroke(c, pos){
       break;
     }
 
-    // ── BRUSH: bristle strands — fully continuous, no dots ──
     case 'brush':{
-      // Only draw if mouse moved
       if(dist < 0.3) break;
-
       const speed  = Math.min(dist, 30);
-      const sf     = 1 - speed/60;  // slow = thick, fast = thin
+      const sf     = 1 - speed/60;
       const bOp    = Math.max(0.06, pOpac * (0.18 + sf*0.3));
       const spread = pSize * 0.5;
       const nBristles = Math.max(4, Math.round(4 + pSize * 0.35));
-
-      // Perpendicular direction to stroke
       const len  = Math.max(0.001, dist);
       const perpX = -dy / len;
       const perpY =  dx / len;
-
       for(let i = 0; i < nBristles; i++){
         const t    = nBristles > 1 ? (i/(nBristles-1) - 0.5) : 0;
-        // Each bristle has a fixed lateral offset (deterministic per stroke index)
-        const seed = (i * 1.618) % 1; // golden ratio spacing — no Math.random for position
+        const seed = (i * 1.618) % 1;
         const lateralT = (t * 0.8) + (seed - 0.5) * 0.4;
         const ox = perpX * lateralT * spread;
         const oy = perpY * lateralT * spread;
-        const ef = 1 - Math.abs(t) * 0.65;  // edge bristles lighter
-
-        // Use persistent last pos per bristle for continuity
+        const ef = 1 - Math.abs(t) * 0.65;
         const bKey = 100 + i;
         const lx = (_strandLast[bKey]?.x ?? st.lastX) + ox;
         const ly = (_strandLast[bKey]?.y ?? st.lastY) + oy;
-
         c.strokeStyle = hexA(st.color, Math.min(0.9, bOp * ef * (0.75 + seed * 0.5)));
         c.lineWidth   = Math.max(0.4, pSize * 0.11 * ef);
         c.lineCap     = 'round';
@@ -1112,8 +1086,6 @@ function freeStroke(c, pos){
         c.stroke();
         _strandLast[bKey] = {x: pos.x, y: pos.y};
       }
-
-      // Soft center accumulation for wet-paint feel at slow speed
       if(sf > 0.55){
         c.strokeStyle = hexA(st.color, pOpac * 0.07);
         c.lineWidth   = pSize * 0.55;
@@ -1127,7 +1099,6 @@ function freeStroke(c, pos){
       break;
     }
 
-    // ── MARKER: flat chisel tip, continuous ──
     case 'marker':
       c.strokeStyle = hexA(st.color, Math.min(0.75, pOpac*0.7));
       c.lineWidth   = pSize * 2.2;
@@ -1139,7 +1110,6 @@ function freeStroke(c, pos){
       c.lineCap = 'round';
       break;
 
-    // ── ERASER ──
     case 'eraser':
       c.lineWidth = pSize;
       c.lineTo(pos.x, pos.y);
@@ -1148,7 +1118,6 @@ function freeStroke(c, pos){
   }
 }
 
-// Clear strand state when a new stroke begins
 function clearStrandState(){
   for(const k in _strandLast) delete _strandLast[k];
 }
@@ -1562,11 +1531,9 @@ addLayer('Layer 1');
 fitCanvas();
 setTool('pen');
 
-// Set initial color (red so wheel is visible, then black)
 setColor('#ff0000');
 setTimeout(()=>setColor('#000000'),150);
 
-// Welcome text
 setTimeout(()=>{
   const c=layers[1].ctx;c.save();c.globalAlpha=.09;
   const g=c.createLinearGradient(CW*.2,0,CW*.8,0);
