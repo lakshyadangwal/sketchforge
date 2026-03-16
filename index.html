@@ -847,6 +847,36 @@ input[type=range]::-webkit-slider-thumb {
     <div class="srow"><label>Opacity</label><input type="range" id="opacS" min="5" max="100" value="100" oninput="onOpac(this.value)"><div class="sv" id="opacV">100%</div></div>
     <div class="trow"><label>Fill Shapes</label><div class="tog" id="fillTog" onclick="togFill()"></div></div>
     <div class="trow"><label>Dashed</label><div class="tog" id="dashTog" onclick="togDash()"></div></div>
+    <!-- PRESSURE SENSITIVITY -->
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <div class="trow">
+        <label style="color:var(--cyan);font-size:.5rem;letter-spacing:.5px">✦ Pressure Sensitivity</label>
+        <div class="tog on" id="pressureTog" onclick="togPressure()"></div>
+      </div>
+      <div id="pressureControls">
+        <div class="srow" style="margin-top:4px">
+          <label>Affects</label>
+          <select id="pressureAffects" onchange="st.pressureAffects=this.value" style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border2);color:var(--text);padding:3px 5px;border-radius:5px;font-family:'DM Mono',monospace;font-size:.52rem;outline:none">
+            <option value="both">Size + Opacity</option>
+            <option value="size">Size only</option>
+            <option value="opacity">Opacity only</option>
+          </select>
+        </div>
+        <div class="srow">
+          <label>Strength</label>
+          <input type="range" id="pressureStrength" min="0.1" max="1" step="0.05" value="0.7" oninput="document.getElementById('psV').textContent=Math.round(this.value*100)+'%'">
+          <div class="sv" id="psV">70%</div>
+        </div>
+        <!-- Live pressure meter -->
+        <div style="display:flex;align-items:center;gap:7px;margin-top:2px">
+          <label style="font-size:.48rem;color:var(--muted);width:50px;flex-shrink:0">Live</label>
+          <div style="flex:1;height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
+            <div id="pressureMeter" style="height:100%;width:50%;background:linear-gradient(90deg,var(--cyan),var(--lime));border-radius:3px;transition:width .05s"></div>
+          </div>
+          <div id="pressureVal" style="font-size:.52rem;color:var(--cyan);width:28px;text-align:right">0.50</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="ps">
@@ -1015,6 +1045,11 @@ const st={
   gravityDrops:[],
   sprayTimer:null,
   pinching:false, lastPinchDist:0,
+  // Pressure sensitivity
+  pressureOn: true,       // toggle on/off
+  pressure: 0.5,          // current smoothed pressure (0–1)
+  rawPressure: 0.5,       // latest raw value from pointer event
+  pressureAffects: 'both',// 'size' | 'opacity' | 'both'
 };
 
 // ═══ LAYERS ═══
@@ -1096,10 +1131,10 @@ new ResizeObserver(fitCanvas).observe(wrap);
 
 // ═══ COORDS ═══
 function getPos(e){
-  const src=e.touches?e.touches[0]:e;
+  // PointerEvent extends MouseEvent so clientX/Y always exist
   const r=wrap.getBoundingClientRect();
-  let x=(src.clientX-r.left-st.panX)/st.zoom;
-  let y=(src.clientY-r.top-st.panY)/st.zoom;
+  let x=(e.clientX-r.left-st.panX)/st.zoom;
+  let y=(e.clientY-r.top-st.panY)/st.zoom;
   if(st.pixelMode){const sz=+document.getElementById('pixelSzS').value||16;x=Math.floor(x/sz)*sz+sz/2;y=Math.floor(y/sz)*sz+sz/2;}
   return{x,y};
 }
@@ -1285,74 +1320,221 @@ function showRecordingReady(count){
   setTimeout(()=>{ if(document.getElementById('recReadyToast')) document.getElementById('recReadyToast').remove(); }, 8000);
 }
 
-// ═══ DRAW EVENTS ═══
-temp.addEventListener('mousedown',onDown);
-temp.addEventListener('mousemove',onMove);
-temp.addEventListener('mouseup',onUp);
-temp.addEventListener('mouseleave',onUp);
-temp.addEventListener('touchstart',e=>{if(doPinch(e))return;e.preventDefault();onDown(e);},{passive:false});
-temp.addEventListener('touchmove',e=>{if(doPinchMove(e))return;e.preventDefault();onMove(e);},{passive:false});
-temp.addEventListener('touchend',e=>{st.pinching=false;e.preventDefault();onUp(e);},{passive:false});
+// ═══ PRESSURE SENSITIVITY ═══
+function togPressure(){
+  st.pressureOn=!st.pressureOn;
+  document.getElementById('pressureTog').classList.toggle('on',st.pressureOn);
+  document.getElementById('pressureControls').style.opacity=st.pressureOn?'1':'.35';
+  notify(st.pressureOn?'✦ Pressure sensitivity ON':'Pressure sensitivity OFF');
+}
 
-function onDown(e){
+// Smooth pressure with exponential moving average (kills jitter)
+function smoothPressure(raw){
+  const alpha = 0.25; // lower = smoother but slower response
+  st.pressure = st.pressure * (1-alpha) + raw * alpha;
+  return st.pressure;
+}
+
+// Get the effective size/opacity multiplied by pressure
+function getPressuredSize(){
+  if(!st.pressureOn || st.pressureAffects==='opacity') return st.size;
+  const strength = +document.getElementById('pressureStrength').value;
+  // Map pressure 0→1 to size * (1 - strength*(1-pressure))
+  const p = Math.max(0.05, st.pressure);
+  return Math.max(0.5, st.size * (1 - strength + strength * p));
+}
+
+function getPressuredOpacity(){
+  if(!st.pressureOn || st.pressureAffects==='size') return st.opacity/100;
+  const strength = +document.getElementById('pressureStrength').value;
+  const p = Math.max(0.05, st.pressure);
+  const base = st.opacity/100;
+  return Math.max(0.02, base * (1 - strength + strength * p));
+}
+
+// Update the live pressure meter in the UI
+function updatePressureMeter(){
+  const meter = document.getElementById('pressureMeter');
+  const val   = document.getElementById('pressureVal');
+  if(!meter) return;
+  meter.style.width = (st.pressure*100)+'%';
+  if(val) val.textContent = st.pressure.toFixed(2);
+}
+
+// ═══ POINTER EVENTS (replaces mouse + touch) ═══
+// Pointer Events give us e.pressure (0–1) for stylus, touch and mouse.
+// We track active pointers to handle pinch-to-zoom for touch.
+
+const activePointers = new Map(); // pointerId → {x,y}
+
+temp.addEventListener('pointerdown',  onPointerDown, {passive:false});
+temp.addEventListener('pointermove',  onPointerMove, {passive:false});
+temp.addEventListener('pointerup',    onPointerUp,   {passive:false});
+temp.addEventListener('pointercancel',onPointerUp,   {passive:false});
+temp.addEventListener('pointerleave', onPointerUp,   {passive:false});
+
+// Prevent context menu on right-click / long-press
+temp.addEventListener('contextmenu', e=>e.preventDefault());
+
+function onPointerDown(e){
+  e.preventDefault();
+  activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  temp.setPointerCapture(e.pointerId);
+
+  // Two-finger pinch start
+  if(activePointers.size===2){
+    st.pinching=true;
+    st.drawing=false;
+    st.lastPinchDist=getActivePinchDist();
+    return;
+  }
+  if(st.pinching) return;
+
+  // Read initial pressure (pen down = full, mouse = 0.5 always)
+  const rawP = e.pressure === 0 ? 0.5 : e.pressure;
+  smoothPressure(rawP);
+  updatePressureMeter();
+
   const pos=getPos(e);
   st.drawing=true; st.lastX=pos.x; st.lastY=pos.y; st.startX=pos.x; st.startY=pos.y;
   if(st.tool==='fill'){saveSnap();floodFill(pos);st.drawing=false;return;}
   if(st.tool==='eyedropper'){pickColor(pos);st.drawing=false;return;}
   if(st.tool==='text'){saveSnap();addText(pos);st.drawing=false;return;}
   saveSnap();
-  if(st.recording){st.currentStroke={tool:st.tool,color:st.color,size:st.size,opacity:st.opacity,fill:st.fill,dash:st.dash,points:[{x:pos.x,y:pos.y,t:Date.now()}]};}
+  if(st.recording){st.currentStroke={tool:st.tool,color:st.color,size:st.size,opacity:st.opacity,fill:st.fill,dash:st.dash,points:[{x:pos.x,y:pos.y,t:Date.now(),p:st.pressure}]};}
   if(st.tool==='spray'){sprayAt(pos);st.sprayTimer=setInterval(()=>sprayAt({x:st.lastX,y:st.lastY}),28);return;}
   if(st.tool==='gravity')return;
   if(isFree()){
     const c=getCtx();if(!c)return;
-    setupCtx(c,st.tool==='eraser');
+    setupPressureCtx(c,st.tool==='eraser');
     if(st.mirror){mirrorPts(pos.x,pos.y).forEach(p=>{const c2=getCtx();c2.beginPath();c2.moveTo(p.x,p.y);});}
     else{c.beginPath();c.moveTo(pos.x,pos.y);}
   }
 }
 
-function onMove(e){
+function onPointerMove(e){
+  e.preventDefault();
+  activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+  // Handle pinch zoom
+  if(activePointers.size===2){
+    if(!st.pinching){st.pinching=true;st.lastPinchDist=getActivePinchDist();return;}
+    const dist=getActivePinchDist();
+    const delta=dist-st.lastPinchDist;
+    st.zoom=Math.min(5,Math.max(.1,st.zoom+delta*.004));
+    st.lastPinchDist=dist;
+    applyTransform();
+    return;
+  }
+
+  // Update pressure with smoothing
+  const rawP = e.pressure === 0 ? 0.5 : e.pressure;
+  // Mouse always reports 0.5 — detect and show it as steady
+  const isMouse = e.pointerType==='mouse';
+  smoothPressure(isMouse ? 0.5 : rawP);
+  updatePressureMeter();
+
   const pos=getPos(e); st.lastX=pos.x; st.lastY=pos.y;
-  if(st.recording&&st.currentStroke)st.currentStroke.points.push({x:pos.x,y:pos.y,t:Date.now()});
+  if(st.recording&&st.currentStroke)st.currentStroke.points.push({x:pos.x,y:pos.y,t:Date.now(),p:st.pressure});
   if(!st.drawing)return;
+
   if(isShape()){
-    tCtx.clearRect(0,0,CW,CH); setupCtx(tCtx,false); drawShape(tCtx,st.startX,st.startY,pos.x,pos.y); return;
+    tCtx.clearRect(0,0,CW,CH); setupPressureCtx(tCtx,false); drawShape(tCtx,st.startX,st.startY,pos.x,pos.y); return;
   }
   if(st.tool==='spray')return;
   if(st.tool==='gravity'){gravityPaint(pos);return;}
   const c=getCtx();if(!c)return;
   if(st.mirror){
     const pts=mirrorPts(pos.x,pos.y),src=mirrorPts(st.lastX,st.lastY);
-    pts.forEach((p,i)=>{setupCtx(c,st.tool==='eraser');c.beginPath();c.moveTo(src[i].x,src[i].y);c.lineTo(p.x,p.y);c.stroke();});
+    pts.forEach((p,i)=>{setupPressureCtx(c,st.tool==='eraser');c.beginPath();c.moveTo(src[i].x,src[i].y);c.lineTo(p.x,p.y);c.stroke();});
   } else {
-    setupCtx(c,st.tool==='eraser'); freeStroke(c,pos); c.beginPath(); c.moveTo(pos.x,pos.y);
+    setupPressureCtx(c,st.tool==='eraser'); freeStroke(c,pos); c.beginPath(); c.moveTo(pos.x,pos.y);
   }
 }
 
-function onUp(e){
+function onPointerUp(e){
+  activePointers.delete(e.pointerId);
+  if(activePointers.size < 2) st.pinching=false;
   if(!st.drawing){st.drawing=false;return;}
   st.drawing=false; clearInterval(st.sprayTimer);
+  // Reset pressure to neutral on lift
+  smoothPressure(0.5);
+  updatePressureMeter();
   if(st.recording&&st.currentStroke){st.strokes.push(st.currentStroke);st.currentStroke=null;recUpdate();}
-  const pos=e&&(e.changedTouches?getPos({touches:e.changedTouches}):getPos(e))||{x:st.lastX,y:st.lastY};
+  const pos={x:st.lastX,y:st.lastY};
   if(isShape()){
     tCtx.clearRect(0,0,CW,CH);
-    const c=getCtx();if(c){setupCtx(c,false);drawShape(c,st.startX,st.startY,pos.x,pos.y);}
+    const c=getCtx();if(c){setupPressureCtx(c,false);drawShape(c,st.startX,st.startY,pos.x,pos.y);}
   }
   const c=getCtx();if(c)c.beginPath();
   renderLayers();
+}
+
+// Get distance between the two active touch pointers
+function getActivePinchDist(){
+  const pts=[...activePointers.values()];
+  if(pts.length<2) return 0;
+  const dx=pts[0].x-pts[1].x, dy=pts[0].y-pts[1].y;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+// ─── setupPressureCtx: like setupCtx but applies live pressure ───
+function setupPressureCtx(c, erase){
+  c.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+  const size    = getPressuredSize();
+  const opacity = erase ? 1 : getPressuredOpacity();
+  c.strokeStyle = erase ? 'rgba(0,0,0,1)' : hexA(st.color, opacity);
+  c.fillStyle   = erase ? 'rgba(0,0,0,1)' : hexA(st.color, opacity);
+  c.lineWidth   = size;
+  c.lineCap     = 'round';
+  c.lineJoin    = 'round';
+  c.setLineDash(st.dash ? [size*2.5, size] : []);
+}
+
+// Keep old setupCtx for non-pressure uses (shapes preview, fill, etc.)
+function setupCtx(c, erase){
+  c.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+  const a = st.opacity/100;
+  c.strokeStyle = erase ? 'rgba(0,0,0,1)' : hexA(st.color,a);
+  c.fillStyle   = erase ? 'rgba(0,0,0,1)' : hexA(st.color,a);
+  c.lineWidth   = st.size;
+  c.lineCap     = 'round'; c.lineJoin = 'round';
+  c.setLineDash(st.dash ? [st.size*2.5, st.size] : []);
 }
 
 function isFree(){return['pen','pencil','brush','marker','eraser'].includes(st.tool);}
 function isShape(){return['line','rect','circle','triangle','arrow','star'].includes(st.tool);}
 
 function freeStroke(c,pos){
+  const pSize    = getPressuredSize();
+  const pOpacity = getPressuredOpacity();
   switch(st.tool){
-    case 'pen':c.lineTo(pos.x,pos.y);c.stroke();break;
-    case 'pencil':c.globalAlpha=.42;c.lineWidth=st.size*.65;c.lineTo(pos.x,pos.y);c.stroke();c.globalAlpha=1;c.lineWidth=st.size;break;
-    case 'brush':{const dx=pos.x-st.lastX,dy=pos.y-st.lastY;c.lineWidth=Math.max(1,st.size-Math.sqrt(dx*dx+dy*dy)*.22);c.lineTo(pos.x,pos.y);c.stroke();break;}
-    case 'marker':c.globalAlpha=.55;c.lineWidth=st.size*1.7;c.lineCap='square';c.lineTo(pos.x,pos.y);c.stroke();c.globalAlpha=1;c.lineWidth=st.size;c.lineCap='round';break;
-    case 'eraser':c.lineTo(pos.x,pos.y);c.stroke();break;
+    case 'pen':
+      c.lineWidth=pSize;
+      c.lineTo(pos.x,pos.y); c.stroke();
+      break;
+    case 'pencil':
+      c.globalAlpha=pOpacity*.42; c.lineWidth=pSize*.65;
+      c.lineTo(pos.x,pos.y); c.stroke();
+      c.globalAlpha=1; c.lineWidth=pSize;
+      break;
+    case 'brush':{
+      const dx=pos.x-st.lastX, dy=pos.y-st.lastY;
+      const vel=Math.sqrt(dx*dx+dy*dy);
+      // Pressure ADDS to size (thick = heavy press, thin = fast or light)
+      c.lineWidth=Math.max(0.5, pSize - vel*.18);
+      c.lineTo(pos.x,pos.y); c.stroke();
+      break;
+    }
+    case 'marker':
+      c.globalAlpha=pOpacity*.55; c.lineWidth=pSize*1.7; c.lineCap='square';
+      c.lineTo(pos.x,pos.y); c.stroke();
+      c.globalAlpha=1; c.lineWidth=pSize; c.lineCap='round';
+      break;
+    case 'eraser':
+      c.lineWidth=pSize;
+      c.lineTo(pos.x,pos.y); c.stroke();
+      break;
   }
 }
 
@@ -1422,10 +1604,8 @@ function floodFill(pos){
 function pickColor(pos){const c=getCtx();if(!c)return;const p=c.getImageData(Math.round(pos.x),Math.round(pos.y),1,1).data;const hex='#'+[p[0],p[1],p[2]].map(v=>v.toString(16).padStart(2,'0')).join('');setColor(hex);setTool('pen');notify('Picked: '+hex.toUpperCase());}
 function addText(pos){const t=prompt('Enter text:');if(!t)return;const c=getCtx();if(!c)return;c.globalCompositeOperation='source-over';c.fillStyle=hexA(st.color,st.opacity/100);c.font=`${st.size*4}px sans-serif`;c.fillText(t,pos.x,pos.y);notify('Text added');}
 
-// ═══ PINCH ═══
-function doPinch(e){if(e.touches.length===2){st.pinching=true;st.lastPinchDist=pDist(e);return true;}return false;}
-function doPinchMove(e){if(e.touches.length===2&&st.pinching){e.preventDefault();const d=pDist(e);st.zoom=Math.min(5,Math.max(.1,st.zoom+(d-st.lastPinchDist)*.004));st.lastPinchDist=d;applyTransform();return true;}return false;}
-function pDist(e){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;return Math.sqrt(dx*dx+dy*dy);}
+// getPos still needed for coord conversion
+
 
 // ═══ TOOLS CONFIG ═══
 const TOOLS=[
