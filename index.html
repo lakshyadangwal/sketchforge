@@ -848,67 +848,116 @@ input[type=range]::-webkit-slider-thumb {
   <div class="ps" style="padding:14px 12px">
     <div class="ps-title">Color</div>
 
-    <!-- Wheel canvas -->
+    <!-- Hue Ring (pure CSS conic-gradient, no canvas needed) -->
     <div style="display:flex;justify-content:center;margin-bottom:10px">
-      <canvas id="colorWheel" width="172" height="172"
-        style="border-radius:50%;cursor:crosshair;display:block"
+      <div id="wheelWrap" style="position:relative;width:172px;height:172px;flex-shrink:0;cursor:crosshair"
         onmousedown="wheelDown(event)" onmousemove="wheelMove(event)" onmouseup="wheelUp()"
         ontouchstart="wheelTouchDown(event)" ontouchmove="wheelTouchMove(event)" ontouchend="wheelUp()">
-      </canvas>
+        <!-- Outer ring using conic-gradient -->
+        <div id="hueRing" style="
+          position:absolute;inset:0;border-radius:50%;
+          background:conic-gradient(
+            hsl(0,100%,50%) 0deg,
+            hsl(30,100%,50%) 30deg,
+            hsl(60,100%,50%) 60deg,
+            hsl(90,100%,50%) 90deg,
+            hsl(120,100%,50%) 120deg,
+            hsl(150,100%,50%) 150deg,
+            hsl(180,100%,50%) 180deg,
+            hsl(210,100%,50%) 210deg,
+            hsl(240,100%,50%) 240deg,
+            hsl(270,100%,50%) 270deg,
+            hsl(300,100%,50%) 300deg,
+            hsl(330,100%,50%) 330deg,
+            hsl(360,100%,50%) 360deg
+          );
+        "></div>
+        <!-- Inner cutout (makes it a ring) -->
+        <div style="
+          position:absolute;inset:22px;border-radius:50%;
+          background:var(--panel);
+        "></div>
+        <!-- Hue cursor -->
+        <div id="hueCursor" style="
+          position:absolute;width:16px;height:16px;border-radius:50%;
+          border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.6);
+          transform:translate(-50%,-50%);pointer-events:none;
+          top:50%;left:50%;transition:background .1s;
+        "></div>
+      </div>
     </div>
 
-    <!-- SV box -->
+    <!-- SV Box (CSS gradients layered) -->
     <div style="position:relative;margin-bottom:10px">
-      <canvas id="svBox" width="186" height="100"
-        style="width:100%;border-radius:6px;cursor:crosshair;display:block"
+      <div id="svBox" style="
+        width:100%;height:110px;border-radius:8px;cursor:crosshair;
+        position:relative;overflow:hidden;
+        border:1px solid var(--border2);
+      "
         onmousedown="svDown(event)" onmousemove="svMove(event)" onmouseup="svUp()"
         ontouchstart="svTouchDown(event)" ontouchmove="svTouchMove(event)" ontouchend="svUp()">
-      </canvas>
-      <!-- SV cursor -->
-      <div id="svCursor" style="position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.8);pointer-events:none;transform:translate(-50%,-50%);top:50%;left:50%"></div>
+        <!-- Base hue layer -->
+        <div id="svBaseHue" style="position:absolute;inset:0;background:hsl(0,100%,50%)"></div>
+        <!-- White saturation overlay -->
+        <div style="position:absolute;inset:0;background:linear-gradient(to right,#fff,transparent)"></div>
+        <!-- Black value overlay -->
+        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent,#000)"></div>
+        <!-- SV cursor -->
+        <div id="svCursor" style="
+          position:absolute;width:14px;height:14px;border-radius:50%;
+          border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.5);
+          transform:translate(-50%,-50%);pointer-events:none;
+          top:0%;left:100%;
+        "></div>
+      </div>
     </div>
 
-    <!-- Current color + hex input -->
+    <!-- Current color swatch + hex input -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div id="mainSwatch" class="cswatch" onclick="document.getElementById('colorPicker').click()" style="flex-shrink:0"></div>
-      <input id="hexInput" type="text" value="#000000"
-        style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.72rem;outline:none;letter-spacing:1px"
+      <input id="hexInput" type="text" value="#FF0000"
+        style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.72rem;outline:none;letter-spacing:1px;text-transform:uppercase"
         oninput="onHexInput(this.value)"
         onfocus="this.select()">
       <div id="hexLbl" style="display:none"></div>
     </div>
 
-    <!-- HSV sliders -->
-    <div class="srow"><label>H</label>
-      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+    <!-- H / S / V sliders with CSS gradient tracks -->
+    <div class="srow" style="margin-bottom:8px">
+      <label>H</label>
+      <div style="flex:1;position:relative;height:12px;border-radius:6px;cursor:pointer;overflow:visible"
         id="hueTrack" onmousedown="hueSliderDown(event)" onmousemove="hueSliderMove(event)" onmouseup="hueSliderUp()"
         ontouchstart="hueSliderTouchDown(event)" ontouchmove="hueSliderTouchMove(event)" ontouchend="hueSliderUp()">
-        <canvas id="hueBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
-        <div id="hueThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:0%"></div>
+        <div style="position:absolute;inset:0;border-radius:6px;background:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))"></div>
+        <div id="hueThumb" style="position:absolute;top:50%;width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none;left:0%"></div>
       </div>
       <div class="sv" id="hueV">0°</div>
     </div>
-    <div class="srow"><label>S</label>
-      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+
+    <div class="srow" style="margin-bottom:8px">
+      <label>S</label>
+      <div style="flex:1;position:relative;height:12px;border-radius:6px;cursor:pointer"
         id="satTrack" onmousedown="satSliderDown(event)" onmousemove="satSliderMove(event)" onmouseup="satSliderUp()"
         ontouchstart="satSliderTouchDown(event)" ontouchmove="satSliderTouchMove(event)" ontouchend="satSliderUp()">
-        <canvas id="satBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
-        <div id="satThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:100%"></div>
+        <div id="satTrackBg" style="position:absolute;inset:0;border-radius:6px;"></div>
+        <div id="satThumb" style="position:absolute;top:50%;width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none;left:100%"></div>
       </div>
-      <div class="sv" id="satV">0%</div>
+      <div class="sv" id="satV">100%</div>
     </div>
-    <div class="srow"><label>V</label>
-      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+
+    <div class="srow" style="margin-bottom:8px">
+      <label>V</label>
+      <div style="flex:1;position:relative;height:12px;border-radius:6px;cursor:pointer"
         id="valTrack" onmousedown="valSliderDown(event)" onmousemove="valSliderMove(event)" onmouseup="valSliderUp()"
         ontouchstart="valSliderTouchDown(event)" ontouchmove="valSliderTouchMove(event)" ontouchend="valSliderUp()">
-        <canvas id="valBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
-        <div id="valThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:0%"></div>
+        <div id="valTrackBg" style="position:absolute;inset:0;border-radius:6px;"></div>
+        <div id="valThumb" style="position:absolute;top:50%;width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4),0 2px 6px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none;left:100%"></div>
       </div>
-      <div class="sv" id="valV">0%</div>
+      <div class="sv" id="valV">100%</div>
     </div>
 
     <!-- Quick palette -->
-    <div class="palette-grid" id="paletteGrid" style="margin-top:6px"></div>
+    <div class="palette-grid" id="paletteGrid" style="margin-top:4px"></div>
   </div>
 
   <div class="ps">
@@ -1212,12 +1261,6 @@ function applyTransform(){
 function doZoom(d){st.zoom=Math.min(5,Math.max(.1,st.zoom+d));applyTransform();}
 temp.addEventListener('wheel',e=>{e.preventDefault();doZoom(e.deltaY>0?-.12:.12);},{passive:false});
 new ResizeObserver(fitCanvas).observe(wrap);
-
-// Redraw color wheel whenever the right panel resizes (e.g. on load, resize)
-const _wheelPanel = document.querySelector('.right-panel');
-if(_wheelPanel){
-  new ResizeObserver(() => { setTimeout(redrawColorUI, 20); }).observe(_wheelPanel);
-}
 
 // ═══ COORDS ═══
 function getPos(e){
@@ -2007,6 +2050,13 @@ function onMRGB(){const r=+document.getElementById('mrS').value,g=+document.getE
 // Current HSV state
 let cHue=0, cSat=0, cVal=0; // 0-360, 0-1, 0-1
 
+
+// ═══════════════════════════════════════════════
+//  COLOR WHEEL ENGINE — CSS/DOM (no canvas timing issues)
+// ═══════════════════════════════════════════════
+
+let cHue=0, cSat=1, cVal=1; // start vivid red
+
 // ── HSV ↔ RGB helpers ──
 function hsvToRgb(h,s,v){
   const i=Math.floor(h/60)%6, f=h/60-Math.floor(h/60);
@@ -2024,200 +2074,147 @@ function rgbToHsv(r,g,b){
 function rgbToHex(r,g,b){return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');}
 function hexToRgb(hex){
   const h=hex.replace('#','');
-  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+  return[parseInt(h.slice(0,2),16)||0, parseInt(h.slice(2,4),16)||0, parseInt(h.slice(4,6),16)||0];
 }
 
-// ── Draw the hue ring ──
-function drawColorWheel(){
-  const cvs=document.getElementById('colorWheel'); if(!cvs)return;
-  const ctx=cvs.getContext('2d'), W=cvs.width, cx=W/2, cy=W/2;
-  const outerR=cx-2, innerR=cx-22;
-  ctx.clearRect(0,0,W,W);
-  // Draw hue ring in segments
-  for(let a=0;a<360;a+=1){
-    const start=(a-0.5)*Math.PI/180, end=(a+1.5)*Math.PI/180;
-    const [r,g,b]=hsvToRgb(a,1,1);
-    ctx.beginPath(); ctx.moveTo(cx,cy);
-    ctx.arc(cx,cy,outerR,start,end);
-    ctx.closePath();
-    ctx.fillStyle=`rgb(${r},${g},${b})`;
-    ctx.fill();
-  }
-  // Punch out inner circle
-  ctx.globalCompositeOperation='destination-out';
-  ctx.beginPath(); ctx.arc(cx,cy,innerR,0,Math.PI*2); ctx.fill();
-  ctx.globalCompositeOperation='source-over';
-  // Draw hue cursor
-  const hRad=(cHue-90)*Math.PI/180;
-  const cr=(outerR+innerR)/2;
-  const hx=cx+cr*Math.cos(hRad), hy=cy+cr*Math.sin(hRad);
-  ctx.beginPath(); ctx.arc(hx,hy,8,0,Math.PI*2);
-  ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
-  ctx.beginPath(); ctx.arc(hx,hy,6,0,Math.PI*2);
-  const [hr,hg,hb]=hsvToRgb(cHue,1,1);
-  ctx.fillStyle=`rgb(${hr},${hg},${hb})`; ctx.fill();
-}
-
-// ── Draw the SV square ──
-function drawSVBox(){
-  const cvs=document.getElementById('svBox'); if(!cvs)return;
-  // Sync canvas resolution to actual display size
-  const dispW = cvs.clientWidth || 186;
-  const dispH = cvs.clientHeight || 100;
-  if(cvs.width !== dispW) cvs.width = dispW;
-  if(cvs.height !== dispH) cvs.height = dispH;
-  const ctx=cvs.getContext('2d'), W=cvs.width, H=cvs.height;
-  ctx.clearRect(0,0,W,H);
-  // Base: pure hue
-  const [hr,hg,hb]=hsvToRgb(cHue,1,1);
-  ctx.fillStyle=`rgb(${hr},${hg},${hb})`; ctx.fillRect(0,0,W,H);
-  // White gradient left→right (sat 0→1)
-  const wGrad=ctx.createLinearGradient(0,0,W,0);
-  wGrad.addColorStop(0,'rgba(255,255,255,1)');
-  wGrad.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=wGrad; ctx.fillRect(0,0,W,H);
-  // Black gradient top→bottom (val 1→0)
-  const bGrad=ctx.createLinearGradient(0,0,0,H);
-  bGrad.addColorStop(0,'rgba(0,0,0,0)');
-  bGrad.addColorStop(1,'rgba(0,0,0,1)');
-  ctx.fillStyle=bGrad; ctx.fillRect(0,0,W,H);
-  // Position SV cursor dot
-  const cursor=document.getElementById('svCursor');
-  if(cursor){cursor.style.left=(cSat*100)+'%'; cursor.style.top=((1-cVal)*100)+'%';}
-}
-
-// ── Draw the H/S/V slider bars ──
-function drawSliders(){
-  // Hue bar
-  const hBar=document.getElementById('hueBar');
-  if(hBar){
-    const ctx=hBar.getContext('2d'),W=hBar.width,H=hBar.height;
-    const g=ctx.createLinearGradient(0,0,W,0);
-    for(let i=0;i<=360;i+=30){const[r,gv,b]=hsvToRgb(i,1,1);g.addColorStop(i/360,`rgb(${r},${gv},${b})`);}
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    const th=document.getElementById('hueThumb');
-    if(th) th.style.left=(cHue/360*100)+'%';
-    const el=document.getElementById('hueV'); if(el)el.textContent=Math.round(cHue)+'°';
-  }
-  // Sat bar
-  const sBar=document.getElementById('satBar');
-  if(sBar){
-    const ctx=sBar.getContext('2d'),W=sBar.width,H=sBar.height;
-    const [hr,hg,hb]=hsvToRgb(cHue,1,cVal||1);
-    const g=ctx.createLinearGradient(0,0,W,0);
-    g.addColorStop(0,`hsl(${cHue},0%,${(cVal*50+50).toFixed(0)}%)`);
-    g.addColorStop(1,`rgb(${hr},${hg},${hb})`);
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    const th=document.getElementById('satThumb'); if(th)th.style.left=(cSat*100)+'%';
-    const el=document.getElementById('satV'); if(el)el.textContent=Math.round(cSat*100)+'%';
-  }
-  // Val bar
-  const vBar=document.getElementById('valBar');
-  if(vBar){
-    const ctx=vBar.getContext('2d'),W=vBar.width,H=vBar.height;
-    const [hr,hg,hb]=hsvToRgb(cHue,cSat,1);
-    const g=ctx.createLinearGradient(0,0,W,0);
-    g.addColorStop(0,'#000');
-    g.addColorStop(1,`rgb(${hr},${hg},${hb})`);
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    const th=document.getElementById('valThumb'); if(th)th.style.left=(cVal*100)+'%';
-    const el=document.getElementById('valV'); if(el)el.textContent=Math.round(cVal*100)+'%';
-  }
-}
-
-// ── Full redraw of all color UI ──
+// ── Update all CSS-based color UI ──
 function redrawColorUI(){
-  drawColorWheel();
-  drawSVBox();
-  drawSliders();
+  const [r,g,b] = hsvToRgb(cHue,cSat,cVal);
+  const hex = rgbToHex(r,g,b);
+
+  // SV box: update base hue background
+  const svBase = document.getElementById('svBaseHue');
+  if(svBase) svBase.style.background = `hsl(${cHue},100%,50%)`;
+
+  // SV cursor position
+  const svCursor = document.getElementById('svCursor');
+  if(svCursor){ svCursor.style.left=(cSat*100)+'%'; svCursor.style.top=((1-cVal)*100)+'%'; }
+
+  // Hue ring cursor
+  const hueRing = document.getElementById('wheelWrap');
+  if(hueRing){
+    const rad = (cHue - 90) * Math.PI/180;
+    const r2 = 172/2, ringMid = r2 - 11; // midpoint of the ring
+    const cx = r2 + ringMid*Math.cos(rad);
+    const cy = r2 + ringMid*Math.sin(rad);
+    const cur = document.getElementById('hueCursor');
+    if(cur){
+      cur.style.left = cx+'px';
+      cur.style.top  = cy+'px';
+      cur.style.background = `hsl(${cHue},100%,50%)`;
+    }
+  }
+
+  // Slider thumbs & labels
+  const ht=document.getElementById('hueThumb'); if(ht) ht.style.left=(cHue/360*100)+'%';
+  const hv=document.getElementById('hueV'); if(hv) hv.textContent=Math.round(cHue)+'°';
+
+  const st2=document.getElementById('satThumb'); if(st2) st2.style.left=(cSat*100)+'%';
+  const sv=document.getElementById('satV'); if(sv) sv.textContent=Math.round(cSat*100)+'%';
+
+  const vt=document.getElementById('valThumb'); if(vt) vt.style.left=(cVal*100)+'%';
+  const vv=document.getElementById('valV'); if(vv) vv.textContent=Math.round(cVal*100)+'%';
+
+  // Sat slider track: grey → current hue color
+  const satBg = document.getElementById('satTrackBg');
+  if(satBg) satBg.style.background=`linear-gradient(to right,#888,hsl(${cHue},100%,50%))`;
+
+  // Val slider track: black → current hue+sat color
+  const valBg = document.getElementById('valTrackBg');
+  if(valBg) valBg.style.background=`linear-gradient(to right,#000,hsl(${cHue},${Math.round(cSat*100)}%,50%))`;
 }
 
-// ── Apply current HSV as the active color ──
+// ── Apply HSV → active drawing color ──
 function applyHSV(){
   const [r,g,b]=hsvToRgb(cHue,cSat,cVal);
   const hex=rgbToHex(r,g,b);
   st.color=hex;
   document.getElementById('colorPicker').value=hex;
   document.getElementById('mainSwatch').style.background=hex;
-  const inp=document.getElementById('hexInput'); if(inp)inp.value=hex.toUpperCase();
-  const mBtn=document.getElementById('mbColorBtn'); if(mBtn)mBtn.querySelector('div').style.background=hex;
+  const inp=document.getElementById('hexInput'); if(inp) inp.value=hex.toUpperCase();
+  const mBtn=document.getElementById('mbColorBtn'); if(mBtn){const d=mBtn.querySelector('div');if(d)d.style.background=hex;}
+  redrawColorUI();
 }
 
-// ── setColor (called from everywhere — syncs wheel) ──
+// ── setColor (called from palette, eyedropper, etc.) ──
 const PAL=['#000000','#1a1a1a','#555','#999','#ccc','#fff','#ff4d4d','#ff8800','#ffdd00','#44dd44','#00ccff','#4488ff','#9944ff','#ff44aa','#88ddff','#ffcc88','#8b4513','#006400','#00008b','#8b0000','#ff6347','#7fffd4','#ffd700','#ff69b4','#e8ff47','#4dffd6','#ff4d6d','#ff9f45','#a855f7','#06b6d4','#10b981','#f59e0b'];
 function buildPalette(id){const g=document.getElementById(id);if(!g)return;g.innerHTML='';PAL.forEach(c=>{const el=document.createElement('div');el.className='pc';el.style.background=c;el.onclick=()=>{setColor(c);if(id==='mobilePalette')closeSheet();};g.appendChild(el);});}
 
 function setColor(hex){
-  if(!/^#[0-9a-f]{6}$/i.test(hex)) return;
+  if(!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
   const [r,g,b]=hexToRgb(hex);
   [cHue,cSat,cVal]=rgbToHsv(r,g,b);
   st.color=hex;
   document.getElementById('colorPicker').value=hex;
   document.getElementById('mainSwatch').style.background=hex;
-  const inp=document.getElementById('hexInput'); if(inp)inp.value=hex.toUpperCase();
+  const inp=document.getElementById('hexInput'); if(inp) inp.value=hex.toUpperCase();
   const mBtn=document.getElementById('mbColorBtn'); if(mBtn){const d=mBtn.querySelector('div');if(d)d.style.background=hex;}
   redrawColorUI();
 }
 
 function onHexInput(val){
-  const hex=val.startsWith('#')?val:'#'+val;
-  if(/^#[0-9a-f]{6}$/i.test(hex)) setColor(hex);
+  const hex=(val.startsWith('#')?val:'#'+val).trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(hex)) setColor(hex);
 }
 
 // ── Wheel interaction ──
 let _wheelDragging=false;
-function wheelGetHue(e, cvs){
-  const r=cvs.getBoundingClientRect();
-  const x=e.clientX-r.left-cvs.width/2, y=e.clientY-r.top-cvs.height/2;
-  return(Math.atan2(y,x)*180/Math.PI+90+360)%360;
+function _wheelHue(e){
+  const wrap=document.getElementById('wheelWrap');
+  const r=wrap.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  return (Math.atan2(e.clientY-cy, e.clientX-cx)*180/Math.PI+90+360)%360;
 }
-function wheelDown(e){ _wheelDragging=true; cHue=wheelGetHue(e,e.target); applyHSV(); redrawColorUI(); }
-function wheelMove(e){ if(!_wheelDragging)return; cHue=wheelGetHue(e,e.target); applyHSV(); redrawColorUI(); }
+function wheelDown(e){ _wheelDragging=true; cHue=_wheelHue(e); applyHSV(); }
+function wheelMove(e){ if(!_wheelDragging)return; cHue=_wheelHue(e); applyHSV(); }
 function wheelUp(){ _wheelDragging=false; _svDragging=false; _hDragging=false; _sDragging=false; _vDragging=false; }
-function wheelTouchDown(e){e.preventDefault();const t=e.touches[0];_wheelDragging=true;cHue=wheelGetHue({clientX:t.clientX,clientY:t.clientY},e.target);applyHSV();redrawColorUI();}
-function wheelTouchMove(e){e.preventDefault();if(!_wheelDragging)return;const t=e.touches[0];cHue=wheelGetHue({clientX:t.clientX,clientY:t.clientY},e.target);applyHSV();redrawColorUI();}
+function wheelTouchDown(e){e.preventDefault(); _wheelDragging=true; cHue=_wheelHue(e.touches[0]); applyHSV();}
+function wheelTouchMove(e){e.preventDefault(); if(!_wheelDragging)return; cHue=_wheelHue(e.touches[0]); applyHSV();}
 
 // ── SV box interaction ──
 let _svDragging=false;
-function svGetPos(e,cvs){
-  const r=cvs.getBoundingClientRect();
-  return{s:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), v:Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height))};
+function _svPos(e){
+  const box=document.getElementById('svBox');
+  const r=box.getBoundingClientRect();
+  return{ s:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), v:Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height)) };
 }
-function svDown(e){_svDragging=true;const p=svGetPos(e,e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
-function svMove(e){if(!_svDragging)return;const p=svGetPos(e,e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
-function svUp(){wheelUp();}
-function svTouchDown(e){e.preventDefault();_svDragging=true;const t=e.touches[0],p=svGetPos({clientX:t.clientX,clientY:t.clientY},e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
-function svTouchMove(e){e.preventDefault();if(!_svDragging)return;const t=e.touches[0],p=svGetPos({clientX:t.clientX,clientY:t.clientY},e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
+function svDown(e){ _svDragging=true; const p=_svPos(e); cSat=p.s; cVal=p.v; applyHSV(); }
+function svMove(e){ if(!_svDragging)return; const p=_svPos(e); cSat=p.s; cVal=p.v; applyHSV(); }
+function svUp(){ wheelUp(); }
+function svTouchDown(e){e.preventDefault();_svDragging=true;const p=_svPos(e.touches[0]);cSat=p.s;cVal=p.v;applyHSV();}
+function svTouchMove(e){e.preventDefault();if(!_svDragging)return;const p=_svPos(e.touches[0]);cSat=p.s;cVal=p.v;applyHSV();}
 
-// ── Hue slider ──
-let _hDragging=false;
-function huePct(e,el){const r=el.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));}
-function hueSliderDown(e){_hDragging=true;cHue=huePct(e,e.currentTarget)*360;applyHSV();redrawColorUI();}
-function hueSliderMove(e){if(!_hDragging)return;cHue=huePct(e,e.currentTarget)*360;applyHSV();redrawColorUI();}
+// ── Generic slider helper ──
+function _trackPct(e, trackId){
+  const el=document.getElementById(trackId);
+  const r=el.getBoundingClientRect();
+  return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+}
+
+let _hDragging=false, _sDragging=false, _vDragging=false;
+
+function hueSliderDown(e){_hDragging=true;cHue=_trackPct(e,'hueTrack')*360;applyHSV();}
+function hueSliderMove(e){if(!_hDragging)return;cHue=_trackPct(e,'hueTrack')*360;applyHSV();}
 function hueSliderUp(){wheelUp();}
-function hueSliderTouchDown(e){e.preventDefault();_hDragging=true;const t=e.touches[0];cHue=huePct({clientX:t.clientX},e.currentTarget)*360;applyHSV();redrawColorUI();}
-function hueSliderTouchMove(e){e.preventDefault();if(!_hDragging)return;const t=e.touches[0];cHue=huePct({clientX:t.clientX},e.currentTarget)*360;applyHSV();redrawColorUI();}
+function hueSliderTouchDown(e){e.preventDefault();_hDragging=true;cHue=_trackPct(e.touches[0],'hueTrack')*360;applyHSV();}
+function hueSliderTouchMove(e){e.preventDefault();if(!_hDragging)return;cHue=_trackPct(e.touches[0],'hueTrack')*360;applyHSV();}
 
-// ── Saturation slider ──
-let _sDragging=false;
-function satSliderDown(e){_sDragging=true;cSat=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
-function satSliderMove(e){if(!_sDragging)return;cSat=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function satSliderDown(e){_sDragging=true;cSat=_trackPct(e,'satTrack');applyHSV();}
+function satSliderMove(e){if(!_sDragging)return;cSat=_trackPct(e,'satTrack');applyHSV();}
 function satSliderUp(){wheelUp();}
-function satSliderTouchDown(e){e.preventDefault();_sDragging=true;const t=e.touches[0];cSat=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
-function satSliderTouchMove(e){e.preventDefault();if(!_sDragging)return;const t=e.touches[0];cSat=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+function satSliderTouchDown(e){e.preventDefault();_sDragging=true;cSat=_trackPct(e.touches[0],'satTrack');applyHSV();}
+function satSliderTouchMove(e){e.preventDefault();if(!_sDragging)return;cSat=_trackPct(e.touches[0],'satTrack');applyHSV();}
 
-// ── Value slider ──
-let _vDragging=false;
-function valSliderDown(e){_vDragging=true;cVal=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
-function valSliderMove(e){if(!_vDragging)return;cVal=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function valSliderDown(e){_vDragging=true;cVal=_trackPct(e,'valTrack');applyHSV();}
+function valSliderMove(e){if(!_vDragging)return;cVal=_trackPct(e,'valTrack');applyHSV();}
 function valSliderUp(){wheelUp();}
-function valSliderTouchDown(e){e.preventDefault();_vDragging=true;const t=e.touches[0];cVal=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
-function valSliderTouchMove(e){e.preventDefault();if(!_vDragging)return;const t=e.touches[0];cVal=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+function valSliderTouchDown(e){e.preventDefault();_vDragging=true;cVal=_trackPct(e.touches[0],'valTrack');applyHSV();}
+function valSliderTouchMove(e){e.preventDefault();if(!_vDragging)return;cVal=_trackPct(e.touches[0],'valTrack');applyHSV();}
 
-// Global mouseup so drags end even if pointer leaves the element
-document.addEventListener('mouseup',()=>{ _wheelDragging=_svDragging=_hDragging=_sDragging=_vDragging=false; });
+// Global mouseup ends all drags even if pointer leaves element
+document.addEventListener('mouseup', wheelUp);
 
-function onRGB(){} // kept for legacy compatibility — no longer used
+function onRGB(){} // legacy stub
 
 function onSize(v){st.size=+v;const el=document.getElementById('sizeV');if(el)el.textContent=v;}
 function onOpac(v){st.opacity=+v;const el=document.getElementById('opacV');if(el)el.textContent=v+'%';}
@@ -2530,22 +2527,6 @@ buildLeftStrip();
 buildBottomBar();
 buildPalette('paletteGrid');
 
-// Init color wheel with a vivid starting color (not black!)
-// Start with a bright red so the wheel is immediately visible
-cHue = 0; cSat = 1; cVal = 1;
-st.color = '#ff0000';
-document.getElementById('colorPicker').value = '#ff0000';
-document.getElementById('mainSwatch').style.background = '#ff0000';
-const _hexInp = document.getElementById('hexInput');
-if(_hexInp) _hexInp.value = '#FF0000';
-
-// Draw wheel after a short delay so canvas has proper layout dimensions
-setTimeout(() => {
-  redrawColorUI();
-  // Switch to black after drawing so the default drawing color is black
-  setColor('#000000');
-}, 80);
-
 // Layers
 addLayer('Background');
 layers[0].ctx.fillStyle='#ffffff';
@@ -2554,6 +2535,10 @@ addLayer('Layer 1');
 
 fitCanvas();
 setTool('pen');
+
+// Init color wheel — start with vivid red so wheel is visible, then set black as draw color
+setColor('#ff0000');
+setTimeout(()=>{ setColor('#000000'); }, 100);
 
 // Welcome text
 setTimeout(()=>{
