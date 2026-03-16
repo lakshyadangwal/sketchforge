@@ -929,6 +929,7 @@ function onDown(e){
   const pos=getPos(e);
   st.drawing=true;st.lastX=pos.x;st.lastY=pos.y;st.startX=pos.x;st.startY=pos.y;
   _pts.length=0;
+  clearStrandState();
   if(st.tool==='fill'){saveSnap();floodFill(pos);st.drawing=false;return;}
   if(st.tool==='eyedropper'){pickColor(pos);st.drawing=false;return;}
   if(st.tool==='text'){saveSnap();addText(pos);st.drawing=false;return;}
@@ -994,56 +995,162 @@ function isShape(){return['line','rect','circle','triangle','arrow','star'].incl
 // ═══════════════════════════════════════
 // FREEHAND STROKES
 // ═══════════════════════════════════════
-function freeStroke(c,pos){
-  const pSize=getPSize(), pOpac=getPOpac();
-  const dx=pos.x-st.lastX, dy=pos.y-st.lastY;
-  const dist=Math.sqrt(dx*dx+dy*dy);
+
+// Persistent per-stroke last positions for multi-strand tools
+// Key = strand index, value = {x,y}
+const _strandLast = {};
+
+function freeStroke(c, pos){
+  const pSize = getPSize(), pOpac = getPOpac();
+  const dx = pos.x - st.lastX, dy = pos.y - st.lastY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
   switch(st.tool){
-    case 'pen':
-      _pts.push({x:pos.x,y:pos.y});if(_pts.length>4)_pts.shift();
-      c.strokeStyle=hexA(st.color,Math.min(1,pOpac*1.1));c.lineWidth=pSize;c.lineCap='round';c.setLineDash([]);
-      if(_pts.length>=3){
-        const p0=_pts[_pts.length-3],p1=_pts[_pts.length-2],p2=_pts[_pts.length-1];
-        const mx1=(p0.x+p1.x)/2,my1=(p0.y+p1.y)/2,mx2=(p1.x+p2.x)/2,my2=(p1.y+p2.y)/2;
-        c.beginPath();c.moveTo(mx1,my1);c.quadraticCurveTo(p1.x,p1.y,mx2,my2);c.stroke();
-      } else {c.lineTo(pos.x,pos.y);c.stroke();}
+
+    // ── PEN: smooth Bézier quadratic curve ──
+    case 'pen':{
+      _pts.push({x:pos.x, y:pos.y});
+      if(_pts.length > 4) _pts.shift();
+      c.strokeStyle = hexA(st.color, Math.min(1, pOpac*1.1));
+      c.lineWidth   = pSize;
+      c.lineCap     = 'round';
+      c.lineJoin    = 'round';
+      c.setLineDash([]);
+      if(_pts.length >= 3){
+        const p0=_pts[_pts.length-3], p1=_pts[_pts.length-2], p2=_pts[_pts.length-1];
+        const mx1=(p0.x+p1.x)/2, my1=(p0.y+p1.y)/2;
+        const mx2=(p1.x+p2.x)/2, my2=(p1.y+p2.y)/2;
+        c.beginPath(); c.moveTo(mx1,my1); c.quadraticCurveTo(p1.x,p1.y,mx2,my2); c.stroke();
+      } else {
+        c.lineTo(pos.x, pos.y); c.stroke();
+      }
       break;
+    }
+
+    // ── PENCIL: 3 continuous fiber strands + grain particles ──
     case 'pencil':{
-      const gOp=Math.min(.55,pOpac*.38);
-      [{dx:-pSize*.4,dy:-pSize*.15},{dx:0,dy:0},{dx:pSize*.3,dy:pSize*.2}].forEach((o,i)=>{
-        c.strokeStyle=hexA(st.color,gOp*(0.7+i*.15));c.lineWidth=Math.max(.4,pSize*.4*(0.5+Math.random()*.5));c.lineCap='round';c.setLineDash([]);
-        c.beginPath();c.moveTo(st.lastX+o.dx,st.lastY+o.dy);c.lineTo(pos.x+o.dx,pos.y+o.dy);c.stroke();
+      // Only draw if mouse actually moved (prevents single-click dots)
+      if(dist < 0.5) break;
+
+      const gOp = Math.min(0.6, pOpac * 0.45);
+      const thin = Math.max(0.5, pSize * 0.4);
+
+      // 3 offset strands — each is a continuous line segment
+      const offsets = [
+        {ox: -thin*0.9, oy: -thin*0.3},
+        {ox:  0,        oy:  0},
+        {ox:  thin*0.7, oy:  thin*0.5},
+      ];
+      offsets.forEach((o, i) => {
+        // Use persistent last position so strands are continuous
+        const lx = (_strandLast[i]?.x ?? st.lastX) + o.ox;
+        const ly = (_strandLast[i]?.y ?? st.lastY) + o.oy;
+        c.strokeStyle = hexA(st.color, gOp * (0.65 + i * 0.18));
+        c.lineWidth   = Math.max(0.4, thin * (0.5 + Math.random()*0.5));
+        c.lineCap     = 'round';
+        c.setLineDash([]);
+        c.beginPath();
+        c.moveTo(lx, ly);
+        c.lineTo(pos.x + o.ox, pos.y + o.oy);
+        c.stroke();
+        _strandLast[i] = {x: pos.x, y: pos.y};
       });
-      if(dist>1){
-        c.fillStyle=hexA(st.color,gOp*.4);
-        const steps=Math.max(1,Math.floor(dist/2.5));
-        for(let i=0;i<steps;i++){if(Math.random()>.4){const t=i/steps,bx=st.lastX+dx*t+(Math.random()-.5)*pSize,by=st.lastY+dy*t+(Math.random()-.5)*pSize;c.beginPath();c.arc(bx,by,Math.random()*pSize*.25,0,Math.PI*2);c.fill();}}
+
+      // Grain particles — only scattered dots along path, not at a single point
+      c.fillStyle = hexA(st.color, gOp * 0.35);
+      const steps = Math.max(1, Math.floor(dist / 3));
+      for(let i = 0; i < steps; i++){
+        const t  = i / steps;
+        const bx = st.lastX + dx*t + (Math.random()-0.5)*pSize*1.1;
+        const by = st.lastY + dy*t + (Math.random()-0.5)*pSize*1.1;
+        if(Math.random() > 0.45){
+          c.beginPath();
+          c.arc(bx, by, Math.random()*thin*0.45, 0, Math.PI*2);
+          c.fill();
+        }
       }
       break;
     }
+
+    // ── BRUSH: bristle strands — fully continuous, no dots ──
     case 'brush':{
-      const speed=Math.min(dist,30),sf=1-speed/60;
-      const bOp=Math.max(.04,pOpac*(.15+sf*.35));
-      const spread=pSize*.5,bristles=Math.round(5+pSize*.35);
-      const len=Math.max(.001,dist),px=-dy/len,py=dx/len;
-      for(let i=0;i<bristles;i++){
-        const t=bristles>1?i/(bristles-1)-.5:0;
-        const ox=px*t*spread*(0.6+Math.random()*.8),oy=py*t*spread*(0.6+Math.random()*.8);
-        const ef=1-Math.abs(t)*.7;
-        c.strokeStyle=hexA(st.color,Math.min(.85,bOp*ef*(0.6+Math.random()*.6)));
-        c.lineWidth=Math.max(.3,pSize*.1*ef);c.lineCap='round';c.setLineDash([]);
-        c.beginPath();c.moveTo(st.lastX+ox,st.lastY+oy);c.lineTo(pos.x+ox,pos.y+oy);c.stroke();
+      // Only draw if mouse moved
+      if(dist < 0.3) break;
+
+      const speed  = Math.min(dist, 30);
+      const sf     = 1 - speed/60;  // slow = thick, fast = thin
+      const bOp    = Math.max(0.06, pOpac * (0.18 + sf*0.3));
+      const spread = pSize * 0.5;
+      const nBristles = Math.max(4, Math.round(4 + pSize * 0.35));
+
+      // Perpendicular direction to stroke
+      const len  = Math.max(0.001, dist);
+      const perpX = -dy / len;
+      const perpY =  dx / len;
+
+      for(let i = 0; i < nBristles; i++){
+        const t    = nBristles > 1 ? (i/(nBristles-1) - 0.5) : 0;
+        // Each bristle has a fixed lateral offset (deterministic per stroke index)
+        const seed = (i * 1.618) % 1; // golden ratio spacing — no Math.random for position
+        const lateralT = (t * 0.8) + (seed - 0.5) * 0.4;
+        const ox = perpX * lateralT * spread;
+        const oy = perpY * lateralT * spread;
+        const ef = 1 - Math.abs(t) * 0.65;  // edge bristles lighter
+
+        // Use persistent last pos per bristle for continuity
+        const bKey = 100 + i;
+        const lx = (_strandLast[bKey]?.x ?? st.lastX) + ox;
+        const ly = (_strandLast[bKey]?.y ?? st.lastY) + oy;
+
+        c.strokeStyle = hexA(st.color, Math.min(0.9, bOp * ef * (0.75 + seed * 0.5)));
+        c.lineWidth   = Math.max(0.4, pSize * 0.11 * ef);
+        c.lineCap     = 'round';
+        c.setLineDash([]);
+        c.beginPath();
+        c.moveTo(lx, ly);
+        c.lineTo(pos.x + ox, pos.y + oy);
+        c.stroke();
+        _strandLast[bKey] = {x: pos.x, y: pos.y};
+      }
+
+      // Soft center accumulation for wet-paint feel at slow speed
+      if(sf > 0.55){
+        c.strokeStyle = hexA(st.color, pOpac * 0.07);
+        c.lineWidth   = pSize * 0.55;
+        c.lineCap     = 'round';
+        c.setLineDash([]);
+        c.beginPath();
+        c.moveTo(st.lastX, st.lastY);
+        c.lineTo(pos.x, pos.y);
+        c.stroke();
       }
       break;
     }
+
+    // ── MARKER: flat chisel tip, continuous ──
     case 'marker':
-      c.strokeStyle=hexA(st.color,Math.min(.75,pOpac*.7));c.lineWidth=pSize*2.2;c.lineCap='square';c.lineJoin='miter';c.setLineDash([]);
-      c.lineTo(pos.x,pos.y);c.stroke();c.lineCap='round';
+      c.strokeStyle = hexA(st.color, Math.min(0.75, pOpac*0.7));
+      c.lineWidth   = pSize * 2.2;
+      c.lineCap     = 'square';
+      c.lineJoin    = 'miter';
+      c.setLineDash([]);
+      c.lineTo(pos.x, pos.y);
+      c.stroke();
+      c.lineCap = 'round';
       break;
+
+    // ── ERASER ──
     case 'eraser':
-      c.lineWidth=pSize;c.lineTo(pos.x,pos.y);c.stroke();
+      c.lineWidth = pSize;
+      c.lineTo(pos.x, pos.y);
+      c.stroke();
       break;
   }
+}
+
+// Clear strand state when a new stroke begins
+function clearStrandState(){
+  for(const k in _strandLast) delete _strandLast[k];
 }
 
 // ═══════════════════════════════════════
