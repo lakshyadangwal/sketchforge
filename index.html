@@ -843,18 +843,72 @@ input[type=range]::-webkit-slider-thumb {
 </div>
 
 <div class="right-panel">
-  <div class="ps"><div class="ps-title">Tools</div><div id="dtList"></div></div>
 
-  <div class="ps">
+  <!-- COLOR WHEEL -->
+  <div class="ps" style="padding:14px 12px">
     <div class="ps-title">Color</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <div class="cswatch" id="mainSwatch" onclick="document.getElementById('colorPicker').click()"></div>
-      <div><div id="hexLbl" style="font-size:.7rem;letter-spacing:1px">#000000</div><div style="font-size:.47rem;color:var(--muted);margin-top:1px">click to change</div></div>
+
+    <!-- Wheel canvas -->
+    <div style="display:flex;justify-content:center;margin-bottom:10px">
+      <canvas id="colorWheel" width="172" height="172"
+        style="border-radius:50%;cursor:crosshair;display:block"
+        onmousedown="wheelDown(event)" onmousemove="wheelMove(event)" onmouseup="wheelUp()"
+        ontouchstart="wheelTouchDown(event)" ontouchmove="wheelTouchMove(event)" ontouchend="wheelUp()">
+      </canvas>
     </div>
-    <div class="palette-grid" id="paletteGrid"></div>
-    <div class="srow"><label>R</label><input type="range" id="rS" min="0" max="255" value="0" oninput="onRGB()"><div class="sv" id="rV">0</div></div>
-    <div class="srow"><label>G</label><input type="range" id="gS" min="0" max="255" value="0" oninput="onRGB()"><div class="sv" id="gV">0</div></div>
-    <div class="srow"><label>B</label><input type="range" id="bS" min="0" max="255" value="0" oninput="onRGB()"><div class="sv" id="bV">0</div></div>
+
+    <!-- SV box -->
+    <div style="position:relative;margin-bottom:10px">
+      <canvas id="svBox" width="186" height="100"
+        style="width:100%;border-radius:6px;cursor:crosshair;display:block"
+        onmousedown="svDown(event)" onmousemove="svMove(event)" onmouseup="svUp()"
+        ontouchstart="svTouchDown(event)" ontouchmove="svTouchMove(event)" ontouchend="svUp()">
+      </canvas>
+      <!-- SV cursor -->
+      <div id="svCursor" style="position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.8);pointer-events:none;transform:translate(-50%,-50%);top:50%;left:50%"></div>
+    </div>
+
+    <!-- Current color + hex input -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div id="mainSwatch" class="cswatch" onclick="document.getElementById('colorPicker').click()" style="flex-shrink:0"></div>
+      <input id="hexInput" type="text" value="#000000"
+        style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.72rem;outline:none;letter-spacing:1px"
+        oninput="onHexInput(this.value)"
+        onfocus="this.select()">
+      <div id="hexLbl" style="display:none"></div>
+    </div>
+
+    <!-- HSV sliders -->
+    <div class="srow"><label>H</label>
+      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+        id="hueTrack" onmousedown="hueSliderDown(event)" onmousemove="hueSliderMove(event)" onmouseup="hueSliderUp()"
+        ontouchstart="hueSliderTouchDown(event)" ontouchmove="hueSliderTouchMove(event)" ontouchend="hueSliderUp()">
+        <canvas id="hueBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
+        <div id="hueThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:0%"></div>
+      </div>
+      <div class="sv" id="hueV">0°</div>
+    </div>
+    <div class="srow"><label>S</label>
+      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+        id="satTrack" onmousedown="satSliderDown(event)" onmousemove="satSliderMove(event)" onmouseup="satSliderUp()"
+        ontouchstart="satSliderTouchDown(event)" ontouchmove="satSliderTouchMove(event)" ontouchend="satSliderUp()">
+        <canvas id="satBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
+        <div id="satThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:100%"></div>
+      </div>
+      <div class="sv" id="satV">0%</div>
+    </div>
+    <div class="srow"><label>V</label>
+      <div style="flex:1;position:relative;height:10px;border-radius:5px;overflow:hidden;cursor:pointer"
+        id="valTrack" onmousedown="valSliderDown(event)" onmousemove="valSliderMove(event)" onmouseup="valSliderUp()"
+        ontouchstart="valSliderTouchDown(event)" ontouchmove="valSliderTouchMove(event)" ontouchend="valSliderUp()">
+        <canvas id="valBar" width="300" height="10" style="width:100%;height:100%;display:block"></canvas>
+        <div id="valThumb" style="position:absolute;top:-2px;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6);transform:translateX(-50%);pointer-events:none;left:0%"></div>
+      </div>
+      <div class="sv" id="valV">0%</div>
+    </div>
+
+    <!-- Quick palette -->
+    <div class="palette-grid" id="paletteGrid" style="margin-top:6px"></div>
   </div>
 
   <div class="ps">
@@ -1158,6 +1212,12 @@ function applyTransform(){
 function doZoom(d){st.zoom=Math.min(5,Math.max(.1,st.zoom+d));applyTransform();}
 temp.addEventListener('wheel',e=>{e.preventDefault();doZoom(e.deltaY>0?-.12:.12);},{passive:false});
 new ResizeObserver(fitCanvas).observe(wrap);
+
+// Redraw color wheel whenever the right panel resizes (e.g. on load, resize)
+const _wheelPanel = document.querySelector('.right-panel');
+if(_wheelPanel){
+  new ResizeObserver(() => { setTimeout(redrawColorUI, 20); }).observe(_wheelPanel);
+}
 
 // ═══ COORDS ═══
 function getPos(e){
@@ -1493,6 +1553,7 @@ function onPointerDown(e){
   if(st.tool==='eyedropper'){pickColor(pos);st.drawing=false;return;}
   if(st.tool==='text'){saveSnap();addText(pos);st.drawing=false;return;}
   saveSnap();
+  _pts.length = 0; // clear smoothing buffer for fresh stroke
   if(st.recording){st.currentStroke={tool:st.tool,color:st.color,size:st.size,opacity:st.opacity,fill:st.fill,dash:st.dash,points:[{x:pos.x,y:pos.y,t:Date.now(),p:st.pressure}]};}
   if(st.tool==='spray'){sprayAt(pos);st.sprayTimer=setInterval(()=>sprayAt({x:st.lastX,y:st.lastY}),28);return;}
   if(st.tool==='gravity')return;
@@ -1597,36 +1658,175 @@ function setupCtx(c, erase){
 function isFree(){return['pen','pencil','brush','marker','eraser'].includes(st.tool);}
 function isShape(){return['line','rect','circle','triangle','arrow','star'].includes(st.tool);}
 
-function freeStroke(c,pos){
+// ─── Per-stroke smoothing buffer ───
+// Stores recent points for Bezier smoothing (pen & brush)
+const _pts = [];   // {x,y} rolling buffer
+
+function freeStroke(c, pos){
   const pSize    = getPressuredSize();
   const pOpacity = getPressuredOpacity();
+  const dx = pos.x - st.lastX;
+  const dy = pos.y - st.lastY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+
   switch(st.tool){
-    case 'pen':
-      c.lineWidth=pSize;
-      c.lineTo(pos.x,pos.y); c.stroke();
-      break;
-    case 'pencil':
-      c.globalAlpha=pOpacity*.42; c.lineWidth=pSize*.65;
-      c.lineTo(pos.x,pos.y); c.stroke();
-      c.globalAlpha=1; c.lineWidth=pSize;
-      break;
-    case 'brush':{
-      const dx=pos.x-st.lastX, dy=pos.y-st.lastY;
-      const vel=Math.sqrt(dx*dx+dy*dy);
-      // Pressure ADDS to size (thick = heavy press, thin = fast or light)
-      c.lineWidth=Math.max(0.5, pSize - vel*.18);
-      c.lineTo(pos.x,pos.y); c.stroke();
+
+    // ══════════════════════════════════════════
+    //  PEN — smooth Bézier ink, sharp hard edge
+    //  Clean, precise, slight ink-swell at joins
+    // ══════════════════════════════════════════
+    case 'pen':{
+      // Push to smoothing buffer (keep last 4)
+      _pts.push({x:pos.x, y:pos.y});
+      if(_pts.length > 4) _pts.shift();
+
+      c.globalCompositeOperation = 'source-over';
+      c.strokeStyle = hexA(st.color, Math.min(1, pOpacity * 1.1));
+      c.lineWidth   = pSize;
+      c.lineCap     = 'round';
+      c.lineJoin    = 'round';
+      c.setLineDash([]);
+
+      if(_pts.length >= 3){
+        // Quadratic Bézier through last 3 points for glass-smooth curve
+        const p0 = _pts[_pts.length-3];
+        const p1 = _pts[_pts.length-2];
+        const p2 = _pts[_pts.length-1];
+        const mx1 = (p0.x + p1.x)/2, my1 = (p0.y + p1.y)/2;
+        const mx2 = (p1.x + p2.x)/2, my2 = (p1.y + p2.y)/2;
+        c.beginPath();
+        c.moveTo(mx1, my1);
+        c.quadraticCurveTo(p1.x, p1.y, mx2, my2);
+        c.stroke();
+      } else {
+        c.lineTo(pos.x, pos.y);
+        c.stroke();
+      }
       break;
     }
-    case 'marker':
-      c.globalAlpha=pOpacity*.55; c.lineWidth=pSize*1.7; c.lineCap='square';
-      c.lineTo(pos.x,pos.y); c.stroke();
-      c.globalAlpha=1; c.lineWidth=pSize; c.lineCap='round';
+
+    // ══════════════════════════════════════════
+    //  PENCIL — grainy, fibrous, textured
+    //  Multiple thin strands + noise particles
+    // ══════════════════════════════════════════
+    case 'pencil':{
+      const grainOpacity = Math.min(0.55, pOpacity * 0.38);
+      const thin = Math.max(0.4, pSize * 0.45);
+
+      // Draw 3 slightly offset strands to simulate pencil fibers
+      const offsets = [
+        {dx: -thin*0.8, dy: -thin*0.3},
+        {dx:  0,        dy:  0        },
+        {dx:  thin*0.6, dy:  thin*0.4 },
+      ];
+      offsets.forEach((off, i) => {
+        c.globalCompositeOperation = 'source-over';
+        c.strokeStyle = hexA(st.color, grainOpacity * (0.7 + i*0.15));
+        c.lineWidth   = thin * (0.5 + Math.random()*0.5);
+        c.lineCap     = 'round';
+        c.setLineDash([]);
+        c.beginPath();
+        c.moveTo(st.lastX + off.dx, st.lastY + off.dy);
+        c.lineTo(pos.x   + off.dx, pos.y   + off.dy);
+        c.stroke();
+      });
+
+      // Grain particles along the stroke path
+      if(dist > 1){
+        c.fillStyle = hexA(st.color, grainOpacity * 0.5);
+        const steps = Math.max(1, Math.floor(dist / 2.5));
+        for(let i = 0; i < steps; i++){
+          const t = i / steps;
+          const bx = st.lastX + dx*t + (Math.random()-0.5)*pSize*1.2;
+          const by = st.lastY + dy*t + (Math.random()-0.5)*pSize*1.2;
+          const r  = Math.random() * thin * 0.55;
+          if(Math.random() > 0.35){
+            c.beginPath();
+            c.arc(bx, by, r, 0, Math.PI*2);
+            c.fill();
+          }
+        }
+      }
       break;
-    case 'eraser':
-      c.lineWidth=pSize;
-      c.lineTo(pos.x,pos.y); c.stroke();
+    }
+
+    // ══════════════════════════════════════════
+    //  BRUSH — bristle spread, paint buildup
+    //  Multiple bristle strands, tapered, wet
+    // ══════════════════════════════════════════
+    case 'brush':{
+      // Speed-sensitive opacity — slow = thick paint, fast = thin wash
+      const speed    = Math.min(dist, 30);
+      const speedFac = 1 - speed/60;
+      const bristleOpacity = Math.max(0.04, pOpacity * (0.15 + speedFac*0.35));
+      const spread   = pSize * 0.55;
+      const bristles = Math.round(5 + pSize * 0.4); // more bristles = bigger brush
+
+      // Perpendicular vector to stroke direction
+      const len  = Math.max(0.001, dist);
+      const perpX = -dy/len;
+      const perpY =  dx/len;
+
+      for(let i = 0; i < bristles; i++){
+        // Distribute bristles across the brush width
+        const t      = bristles > 1 ? (i/(bristles-1) - 0.5) : 0;
+        const offX   = perpX * t * spread * (0.6 + Math.random()*0.8);
+        const offY   = perpY * t * spread * (0.6 + Math.random()*0.8);
+        // Edge bristles are thinner and more transparent
+        const edgeFac = 1 - Math.abs(t)*0.7;
+        const bOpacity = bristleOpacity * edgeFac * (0.6 + Math.random()*0.6);
+        const bWidth   = Math.max(0.3, (pSize*0.12) * edgeFac);
+
+        c.globalCompositeOperation = 'source-over';
+        c.strokeStyle = hexA(st.color, Math.min(0.85, bOpacity));
+        c.lineWidth   = bWidth;
+        c.lineCap     = 'round';
+        c.setLineDash([]);
+        c.beginPath();
+        c.moveTo(st.lastX + offX, st.lastY + offY);
+        c.lineTo(pos.x   + offX, pos.y   + offY);
+        c.stroke();
+      }
+
+      // Extra wet-paint center accumulation at slow speed
+      if(speedFac > 0.6){
+        c.globalCompositeOperation = 'source-over';
+        c.strokeStyle = hexA(st.color, pOpacity * 0.08);
+        c.lineWidth   = pSize * 0.6;
+        c.lineCap     = 'round';
+        c.beginPath();
+        c.moveTo(st.lastX, st.lastY);
+        c.lineTo(pos.x, pos.y);
+        c.stroke();
+      }
       break;
+    }
+
+    // ══════════════════════════════════════════
+    //  MARKER — flat, opaque, chisel-tip
+    // ══════════════════════════════════════════
+    case 'marker':{
+      c.globalCompositeOperation = 'source-over';
+      c.strokeStyle = hexA(st.color, Math.min(0.75, pOpacity*0.7));
+      c.lineWidth   = pSize * 2.2;
+      c.lineCap     = 'square';
+      c.lineJoin    = 'miter';
+      c.setLineDash([]);
+      c.lineTo(pos.x, pos.y);
+      c.stroke();
+      c.lineCap = 'round';
+      break;
+    }
+
+    // ══════════════════════════════════════════
+    //  ERASER
+    // ══════════════════════════════════════════
+    case 'eraser':{
+      c.lineWidth = pSize;
+      c.lineTo(pos.x, pos.y);
+      c.stroke();
+      break;
+    }
   }
 }
 
@@ -1799,20 +1999,226 @@ function openSheet(type){
 function closeSheet(){document.getElementById('sheetBg').classList.remove('open');document.getElementById('sheet').classList.remove('open');}
 function onMRGB(){const r=+document.getElementById('mrS').value,g=+document.getElementById('mgS').value,b=+document.getElementById('mbS').value;document.getElementById('mrV').textContent=r;document.getElementById('mgV').textContent=g;document.getElementById('mbV').textContent=b;const hex='#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');setColor(hex);const sw=document.getElementById('sSwatch');if(sw)sw.style.background=hex;const hl=document.getElementById('sHex');if(hl)hl.textContent=hex.toUpperCase();}
 
-// ═══ COLOR ═══
+
+// ═══════════════════════════════════════════════
+//  COLOR WHEEL ENGINE
+// ═══════════════════════════════════════════════
+
+// Current HSV state
+let cHue=0, cSat=0, cVal=0; // 0-360, 0-1, 0-1
+
+// ── HSV ↔ RGB helpers ──
+function hsvToRgb(h,s,v){
+  const i=Math.floor(h/60)%6, f=h/60-Math.floor(h/60);
+  const p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);
+  const m=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+  return m.map(x=>Math.round(x*255));
+}
+function rgbToHsv(r,g,b){
+  r/=255;g/=255;b/=255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
+  let h=0;
+  if(d){if(max===r)h=((g-b)/d+6)%6;else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;}
+  return[h, max?d/max:0, max];
+}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');}
+function hexToRgb(hex){
+  const h=hex.replace('#','');
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+
+// ── Draw the hue ring ──
+function drawColorWheel(){
+  const cvs=document.getElementById('colorWheel'); if(!cvs)return;
+  const ctx=cvs.getContext('2d'), W=cvs.width, cx=W/2, cy=W/2;
+  const outerR=cx-2, innerR=cx-22;
+  ctx.clearRect(0,0,W,W);
+  // Draw hue ring in segments
+  for(let a=0;a<360;a+=1){
+    const start=(a-0.5)*Math.PI/180, end=(a+1.5)*Math.PI/180;
+    const [r,g,b]=hsvToRgb(a,1,1);
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,outerR,start,end);
+    ctx.closePath();
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fill();
+  }
+  // Punch out inner circle
+  ctx.globalCompositeOperation='destination-out';
+  ctx.beginPath(); ctx.arc(cx,cy,innerR,0,Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+  // Draw hue cursor
+  const hRad=(cHue-90)*Math.PI/180;
+  const cr=(outerR+innerR)/2;
+  const hx=cx+cr*Math.cos(hRad), hy=cy+cr*Math.sin(hRad);
+  ctx.beginPath(); ctx.arc(hx,hy,8,0,Math.PI*2);
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(hx,hy,6,0,Math.PI*2);
+  const [hr,hg,hb]=hsvToRgb(cHue,1,1);
+  ctx.fillStyle=`rgb(${hr},${hg},${hb})`; ctx.fill();
+}
+
+// ── Draw the SV square ──
+function drawSVBox(){
+  const cvs=document.getElementById('svBox'); if(!cvs)return;
+  // Sync canvas resolution to actual display size
+  const dispW = cvs.clientWidth || 186;
+  const dispH = cvs.clientHeight || 100;
+  if(cvs.width !== dispW) cvs.width = dispW;
+  if(cvs.height !== dispH) cvs.height = dispH;
+  const ctx=cvs.getContext('2d'), W=cvs.width, H=cvs.height;
+  ctx.clearRect(0,0,W,H);
+  // Base: pure hue
+  const [hr,hg,hb]=hsvToRgb(cHue,1,1);
+  ctx.fillStyle=`rgb(${hr},${hg},${hb})`; ctx.fillRect(0,0,W,H);
+  // White gradient left→right (sat 0→1)
+  const wGrad=ctx.createLinearGradient(0,0,W,0);
+  wGrad.addColorStop(0,'rgba(255,255,255,1)');
+  wGrad.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=wGrad; ctx.fillRect(0,0,W,H);
+  // Black gradient top→bottom (val 1→0)
+  const bGrad=ctx.createLinearGradient(0,0,0,H);
+  bGrad.addColorStop(0,'rgba(0,0,0,0)');
+  bGrad.addColorStop(1,'rgba(0,0,0,1)');
+  ctx.fillStyle=bGrad; ctx.fillRect(0,0,W,H);
+  // Position SV cursor dot
+  const cursor=document.getElementById('svCursor');
+  if(cursor){cursor.style.left=(cSat*100)+'%'; cursor.style.top=((1-cVal)*100)+'%';}
+}
+
+// ── Draw the H/S/V slider bars ──
+function drawSliders(){
+  // Hue bar
+  const hBar=document.getElementById('hueBar');
+  if(hBar){
+    const ctx=hBar.getContext('2d'),W=hBar.width,H=hBar.height;
+    const g=ctx.createLinearGradient(0,0,W,0);
+    for(let i=0;i<=360;i+=30){const[r,gv,b]=hsvToRgb(i,1,1);g.addColorStop(i/360,`rgb(${r},${gv},${b})`);}
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const th=document.getElementById('hueThumb');
+    if(th) th.style.left=(cHue/360*100)+'%';
+    const el=document.getElementById('hueV'); if(el)el.textContent=Math.round(cHue)+'°';
+  }
+  // Sat bar
+  const sBar=document.getElementById('satBar');
+  if(sBar){
+    const ctx=sBar.getContext('2d'),W=sBar.width,H=sBar.height;
+    const [hr,hg,hb]=hsvToRgb(cHue,1,cVal||1);
+    const g=ctx.createLinearGradient(0,0,W,0);
+    g.addColorStop(0,`hsl(${cHue},0%,${(cVal*50+50).toFixed(0)}%)`);
+    g.addColorStop(1,`rgb(${hr},${hg},${hb})`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const th=document.getElementById('satThumb'); if(th)th.style.left=(cSat*100)+'%';
+    const el=document.getElementById('satV'); if(el)el.textContent=Math.round(cSat*100)+'%';
+  }
+  // Val bar
+  const vBar=document.getElementById('valBar');
+  if(vBar){
+    const ctx=vBar.getContext('2d'),W=vBar.width,H=vBar.height;
+    const [hr,hg,hb]=hsvToRgb(cHue,cSat,1);
+    const g=ctx.createLinearGradient(0,0,W,0);
+    g.addColorStop(0,'#000');
+    g.addColorStop(1,`rgb(${hr},${hg},${hb})`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const th=document.getElementById('valThumb'); if(th)th.style.left=(cVal*100)+'%';
+    const el=document.getElementById('valV'); if(el)el.textContent=Math.round(cVal*100)+'%';
+  }
+}
+
+// ── Full redraw of all color UI ──
+function redrawColorUI(){
+  drawColorWheel();
+  drawSVBox();
+  drawSliders();
+}
+
+// ── Apply current HSV as the active color ──
+function applyHSV(){
+  const [r,g,b]=hsvToRgb(cHue,cSat,cVal);
+  const hex=rgbToHex(r,g,b);
+  st.color=hex;
+  document.getElementById('colorPicker').value=hex;
+  document.getElementById('mainSwatch').style.background=hex;
+  const inp=document.getElementById('hexInput'); if(inp)inp.value=hex.toUpperCase();
+  const mBtn=document.getElementById('mbColorBtn'); if(mBtn)mBtn.querySelector('div').style.background=hex;
+}
+
+// ── setColor (called from everywhere — syncs wheel) ──
 const PAL=['#000000','#1a1a1a','#555','#999','#ccc','#fff','#ff4d4d','#ff8800','#ffdd00','#44dd44','#00ccff','#4488ff','#9944ff','#ff44aa','#88ddff','#ffcc88','#8b4513','#006400','#00008b','#8b0000','#ff6347','#7fffd4','#ffd700','#ff69b4','#e8ff47','#4dffd6','#ff4d6d','#ff9f45','#a855f7','#06b6d4','#10b981','#f59e0b'];
 function buildPalette(id){const g=document.getElementById(id);if(!g)return;g.innerHTML='';PAL.forEach(c=>{const el=document.createElement('div');el.className='pc';el.style.background=c;el.onclick=()=>{setColor(c);if(id==='mobilePalette')closeSheet();};g.appendChild(el);});}
 
 function setColor(hex){
+  if(!/^#[0-9a-f]{6}$/i.test(hex)) return;
+  const [r,g,b]=hexToRgb(hex);
+  [cHue,cSat,cVal]=rgbToHsv(r,g,b);
   st.color=hex;
   document.getElementById('colorPicker').value=hex;
   document.getElementById('mainSwatch').style.background=hex;
-  document.getElementById('hexLbl').textContent=hex.toUpperCase();
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  ['rS','gS','bS'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.value=[r,g,b][i];});
-  ['rV','gV','bV'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[r,g,b][i];});
+  const inp=document.getElementById('hexInput'); if(inp)inp.value=hex.toUpperCase();
+  const mBtn=document.getElementById('mbColorBtn'); if(mBtn){const d=mBtn.querySelector('div');if(d)d.style.background=hex;}
+  redrawColorUI();
 }
-function onRGB(){const r=+document.getElementById('rS').value,g=+document.getElementById('gS').value,b=+document.getElementById('bS').value;['rV','gV','bV'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[r,g,b][i];});setColor('#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''));}
+
+function onHexInput(val){
+  const hex=val.startsWith('#')?val:'#'+val;
+  if(/^#[0-9a-f]{6}$/i.test(hex)) setColor(hex);
+}
+
+// ── Wheel interaction ──
+let _wheelDragging=false;
+function wheelGetHue(e, cvs){
+  const r=cvs.getBoundingClientRect();
+  const x=e.clientX-r.left-cvs.width/2, y=e.clientY-r.top-cvs.height/2;
+  return(Math.atan2(y,x)*180/Math.PI+90+360)%360;
+}
+function wheelDown(e){ _wheelDragging=true; cHue=wheelGetHue(e,e.target); applyHSV(); redrawColorUI(); }
+function wheelMove(e){ if(!_wheelDragging)return; cHue=wheelGetHue(e,e.target); applyHSV(); redrawColorUI(); }
+function wheelUp(){ _wheelDragging=false; _svDragging=false; _hDragging=false; _sDragging=false; _vDragging=false; }
+function wheelTouchDown(e){e.preventDefault();const t=e.touches[0];_wheelDragging=true;cHue=wheelGetHue({clientX:t.clientX,clientY:t.clientY},e.target);applyHSV();redrawColorUI();}
+function wheelTouchMove(e){e.preventDefault();if(!_wheelDragging)return;const t=e.touches[0];cHue=wheelGetHue({clientX:t.clientX,clientY:t.clientY},e.target);applyHSV();redrawColorUI();}
+
+// ── SV box interaction ──
+let _svDragging=false;
+function svGetPos(e,cvs){
+  const r=cvs.getBoundingClientRect();
+  return{s:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)), v:Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height))};
+}
+function svDown(e){_svDragging=true;const p=svGetPos(e,e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
+function svMove(e){if(!_svDragging)return;const p=svGetPos(e,e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
+function svUp(){wheelUp();}
+function svTouchDown(e){e.preventDefault();_svDragging=true;const t=e.touches[0],p=svGetPos({clientX:t.clientX,clientY:t.clientY},e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
+function svTouchMove(e){e.preventDefault();if(!_svDragging)return;const t=e.touches[0],p=svGetPos({clientX:t.clientX,clientY:t.clientY},e.target);cSat=p.s;cVal=p.v;applyHSV();redrawColorUI();}
+
+// ── Hue slider ──
+let _hDragging=false;
+function huePct(e,el){const r=el.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));}
+function hueSliderDown(e){_hDragging=true;cHue=huePct(e,e.currentTarget)*360;applyHSV();redrawColorUI();}
+function hueSliderMove(e){if(!_hDragging)return;cHue=huePct(e,e.currentTarget)*360;applyHSV();redrawColorUI();}
+function hueSliderUp(){wheelUp();}
+function hueSliderTouchDown(e){e.preventDefault();_hDragging=true;const t=e.touches[0];cHue=huePct({clientX:t.clientX},e.currentTarget)*360;applyHSV();redrawColorUI();}
+function hueSliderTouchMove(e){e.preventDefault();if(!_hDragging)return;const t=e.touches[0];cHue=huePct({clientX:t.clientX},e.currentTarget)*360;applyHSV();redrawColorUI();}
+
+// ── Saturation slider ──
+let _sDragging=false;
+function satSliderDown(e){_sDragging=true;cSat=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function satSliderMove(e){if(!_sDragging)return;cSat=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function satSliderUp(){wheelUp();}
+function satSliderTouchDown(e){e.preventDefault();_sDragging=true;const t=e.touches[0];cSat=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+function satSliderTouchMove(e){e.preventDefault();if(!_sDragging)return;const t=e.touches[0];cSat=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+
+// ── Value slider ──
+let _vDragging=false;
+function valSliderDown(e){_vDragging=true;cVal=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function valSliderMove(e){if(!_vDragging)return;cVal=huePct(e,e.currentTarget);applyHSV();redrawColorUI();}
+function valSliderUp(){wheelUp();}
+function valSliderTouchDown(e){e.preventDefault();_vDragging=true;const t=e.touches[0];cVal=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+function valSliderTouchMove(e){e.preventDefault();if(!_vDragging)return;const t=e.touches[0];cVal=huePct({clientX:t.clientX},e.currentTarget);applyHSV();redrawColorUI();}
+
+// Global mouseup so drags end even if pointer leaves the element
+document.addEventListener('mouseup',()=>{ _wheelDragging=_svDragging=_hDragging=_sDragging=_vDragging=false; });
+
+function onRGB(){} // kept for legacy compatibility — no longer used
+
 function onSize(v){st.size=+v;const el=document.getElementById('sizeV');if(el)el.textContent=v;}
 function onOpac(v){st.opacity=+v;const el=document.getElementById('opacV');if(el)el.textContent=v+'%';}
 function togFill(){st.fill=!st.fill;document.getElementById('fillTog').classList.toggle('on',st.fill);}
@@ -2121,11 +2527,24 @@ function notify(msg){const n=document.getElementById('notif');n.textContent=msg;
 // ═══ INIT ═══
 initCanvases();
 buildLeftStrip();
-buildDtList();
 buildBottomBar();
 buildPalette('paletteGrid');
-setColor('#000000');
-document.getElementById('mainSwatch').style.background='#000000';
+
+// Init color wheel with a vivid starting color (not black!)
+// Start with a bright red so the wheel is immediately visible
+cHue = 0; cSat = 1; cVal = 1;
+st.color = '#ff0000';
+document.getElementById('colorPicker').value = '#ff0000';
+document.getElementById('mainSwatch').style.background = '#ff0000';
+const _hexInp = document.getElementById('hexInput');
+if(_hexInp) _hexInp.value = '#FF0000';
+
+// Draw wheel after a short delay so canvas has proper layout dimensions
+setTimeout(() => {
+  redrawColorUI();
+  // Switch to black after drawing so the default drawing color is black
+  setColor('#000000');
+}, 80);
 
 // Layers
 addLayer('Background');
