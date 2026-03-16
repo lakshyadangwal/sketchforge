@@ -721,6 +721,22 @@ input[type=range]::-webkit-slider-thumb {
 }
 .ib-later:hover { border-color:var(--border); color:var(--text) }
 
+/* ── GESTURE TOAST ── */
+.gesture-toast {
+  position: fixed; top: 60px; left: 50%;
+  transform: translateX(-50%) scale(.85);
+  background: rgba(14,14,22,.96); backdrop-filter: blur(12px);
+  border-radius: 40px; padding: 8px 22px;
+  font-family: 'DM Mono', monospace; font-size: .68rem;
+  letter-spacing: 1px; color: var(--lime);
+  border: 1px solid rgba(200,255,0,.35);
+  box-shadow: 0 0 20px rgba(200,255,0,.2);
+  z-index: 8000; opacity: 0; pointer-events: none;
+  transition: all .2s cubic-bezier(.34,1.56,.64,1);
+}
+.gesture-toast.show { opacity: 1; transform: translateX(-50%) scale(1); }
+.gesture-toast.redo { color: var(--cyan); border-color: rgba(0,229,255,.35); box-shadow: 0 0 20px rgba(0,229,255,.2); }
+
 /* ── GUIDE STEPS ── */
 .guide-step {
   display: flex; align-items: flex-start; gap: 12px;
@@ -986,10 +1002,24 @@ input[type=range]::-webkit-slider-thumb {
       <button class="rcbtn" onclick="setRspeed(5)">5×</button>
     </div>
     <div style="text-align:center;margin-top:7px;font-size:.55rem;color:var(--muted)" id="rInfo">0 strokes recorded</div>
+    <!-- Download progress bar (hidden by default) -->
+    <div id="gifProgress" style="display:none;margin-top:10px">
+      <div style="font-size:.55rem;color:var(--cyan);letter-spacing:1px;margin-bottom:5px;text-align:center" id="gifProgressLabel">Building frames…</div>
+      <div style="width:100%;height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
+        <div id="gifProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--lime),var(--cyan));border-radius:3px;transition:width .1s"></div>
+      </div>
+    </div>
   </div>
-  <div class="mfooter"><button class="mfbtn" onclick="closeReplayModal()">Close</button></div>
+  <div class="mfooter">
+    <button class="mfbtn" onclick="downloadReplayPNG()">🖼 PNG</button>
+    <button class="mfbtn" onclick="downloadReplayGIF()">🎞 GIF</button>
+    <button class="mfbtn dl" onclick="downloadReplayMP4()">⬇ Video</button>
+    <button class="mfbtn" onclick="closeReplayModal()">✕ Close</button>
+  </div>
 </div>
 </div>
+
+<div class="gesture-toast" id="gestureToast"></div>
 
 <!-- OFFLINE BADGE -->
 <div class="offline-badge" id="offlineBadge">⚡ Offline — app works without internet</div>
@@ -1189,9 +1219,71 @@ function updatePixelGrid(){
 // ═══ HISTORY ═══
 let history=[], redoStack=[];
 function saveSnap(){history.push(layers.map(l=>l.canvas.toDataURL()));if(history.length>25)history.shift();redoStack=[];}
-function undo(){if(!history.length)return notify('Nothing to undo');redoStack.push(layers.map(l=>l.canvas.toDataURL()));restoreSnap(history.pop());notify('Undo');}
-function redo(){if(!redoStack.length)return notify('Nothing to redo');history.push(layers.map(l=>l.canvas.toDataURL()));restoreSnap(redoStack.pop());notify('Redo');}
+function undo(){if(!history.length)return showGestureToast('↩ Nothing to undo',false);redoStack.push(layers.map(l=>l.canvas.toDataURL()));restoreSnap(history.pop());showGestureToast('↩ Undo',false);}
+function redo(){if(!redoStack.length)return showGestureToast('↪ Nothing to redo',true);history.push(layers.map(l=>l.canvas.toDataURL()));restoreSnap(redoStack.pop());showGestureToast('↪ Redo',true);}
 function restoreSnap(snap){snap.forEach((src,i)=>{if(!layers[i])return;const img=new Image();img.onload=()=>{layers[i].ctx.clearRect(0,0,CW,CH);layers[i].ctx.drawImage(img,0,0);};img.src=src;});}
+
+// ═══ GESTURE TOAST ═══
+let _gToastTimer=null;
+function showGestureToast(msg, isRedo){
+  const t=document.getElementById('gestureToast');
+  if(!t)return;
+  t.textContent=msg;
+  t.className='gesture-toast show'+(isRedo?' redo':'');
+  clearTimeout(_gToastTimer);
+  _gToastTimer=setTimeout(()=>t.classList.remove('show'),1200);
+}
+
+// ═══ MULTI-FINGER GESTURE DETECTION ═══
+// 2 fingers = Undo   |   3 fingers = Redo
+// Uses the activePointers map (populated by pointer events)
+let _gestureActive   = false;  // are we in a gesture right now?
+let _gestureFired    = false;  // did we already fire so we don't repeat?
+let _gestureCount    = 0;      // how many pointers at peak
+
+// We hook into pointerdown to detect finger count on the canvas wrap
+// (not temp canvas, so it works even when drawing is blocked)
+wrap.addEventListener('pointerdown', _onGestureDown, {passive:true});
+wrap.addEventListener('pointerup',   _onGestureUp,   {passive:true});
+wrap.addEventListener('pointercancel',_onGestureUp,  {passive:true});
+
+const _gesturePointers = new Set();
+
+function _onGestureDown(e){
+  _gesturePointers.add(e.pointerId);
+  const count = _gesturePointers.size;
+
+  // Update peak count
+  if(count > _gestureCount) _gestureCount = count;
+
+  if(count >= 2){
+    // Prevent drawing while gesture is active
+    _gestureActive = true;
+    st.drawing = false;
+    clearInterval(st.sprayTimer);
+  }
+}
+
+function _onGestureUp(e){
+  _gesturePointers.delete(e.pointerId);
+  const remaining = _gesturePointers.size;
+
+  // When ALL fingers lift: fire the gesture based on peak count
+  if(remaining === 0){
+    if(_gestureActive && !_gestureFired){
+      if(_gestureCount === 2){
+        undo();
+      } else if(_gestureCount >= 3){
+        redo();
+      }
+      _gestureFired = true;
+    }
+    // Reset
+    _gestureActive  = false;
+    _gestureFired   = false;
+    _gestureCount   = 0;
+  }
+}
 
 // ═══ RECORDING ═══
 function toggleRec(){
@@ -1836,7 +1928,154 @@ function renderRFrame(target){
 }
 function seekReplay(e){const r=document.getElementById('rTimeline').getBoundingClientRect();const pct=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));rState.frame=Math.round(pct*rState.total);renderRFrame(rState.frame);document.getElementById('rProg').style.width=(pct*100)+'%';}
 
-// ═══ DAILY CHALLENGE ═══
+// ─── Download the current replay frame as PNG ───
+function downloadReplayPNG(){
+  if(!st.strokes.length){notify('No recording to download');return;}
+  // Render final complete frame
+  renderRFrame(rState.total);
+  const rc=document.getElementById('rCanvas');
+  const a=document.createElement('a');
+  a.download='sketchforge-replay-'+Date.now()+'.png';
+  a.href=rc.toDataURL('image/png');
+  a.click();
+  notify('🖼 Final frame saved as PNG!');
+}
+
+// ─── Download replay as GIF (pure JS, no library needed) ───
+async function downloadReplayGIF(){
+  if(!st.strokes.length){notify('No recording to download');return;}
+
+  // Pause playback while exporting
+  rState.playing=false;
+  document.getElementById('playBtn').textContent='▶';
+
+  const progress   = document.getElementById('gifProgress');
+  const progressBar= document.getElementById('gifProgressBar');
+  const progressLbl= document.getElementById('gifProgressLabel');
+  progress.style.display='block';
+
+  // How many frames to capture (max 60 for file size)
+  const FRAME_COUNT = Math.min(60, rState.total);
+  const step = Math.max(1, Math.floor(rState.total / FRAME_COUNT));
+  const rc = document.getElementById('rCanvas');
+  const frames = [];
+
+  notify('Building GIF frames… please wait');
+
+  // Capture frames with a small delay between each to keep UI responsive
+  for(let i=0; i<=rState.total; i+=step){
+    renderRFrame(i);
+    frames.push(rc.toDataURL('image/png'));
+    const pct=Math.round((i/rState.total)*100);
+    progressBar.style.width=pct+'%';
+    progressLbl.textContent=`Building frames… ${pct}%`;
+    // Yield to the browser every 10 frames
+    if(i % (step*10) === 0) await new Promise(r=>setTimeout(r,0));
+  }
+  // Always include the final complete frame
+  renderRFrame(rState.total);
+  frames.push(rc.toDataURL('image/png'));
+
+  progressLbl.textContent='Encoding GIF…';
+  progressBar.style.width='100%';
+
+  // Build a simple animated WebP / fallback: download frames as a ZIP-like HTML viewer
+  // Since pure JS GIF encoding is huge, we create a self-contained HTML animation instead
+  const frameDelay = Math.round(1000 / Math.max(1, FRAME_COUNT / 10)); // ~10s total
+
+  const htmlContent = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>SketchForge Replay</title>
+<style>
+  body{margin:0;background:#07070b;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:monospace}
+  img{max-width:90vw;max-height:80vh;border:1px solid #252538;border-radius:8px}
+  .ctrl{margin-top:16px;display:flex;gap:10px}
+  button{padding:8px 20px;background:#c8ff00;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:.8rem}
+  #info{color:#6b6b88;font-size:.7rem;margin-top:8px;letter-spacing:1px}
+</style></head><body>
+<img id="f" src="${frames[0]}">
+<div class="ctrl">
+  <button onclick="playing=!playing;this.textContent=playing?'⏸ Pause':'▶ Play'"">▶ Play</button>
+  <button onclick="idx=0;renderF()">↩ Reset</button>
+</div>
+<div id="info">Frame <span id="fi">1</span> / ${frames.length} · ${frames.length} total frames</div>
+<script>
+const frames=${JSON.stringify(frames)};
+let idx=0,playing=false,last=0;
+const img=document.getElementById('f'),fi=document.getElementById('fi');
+function renderF(){img.src=frames[idx];fi.textContent=idx+1;}
+function loop(ts){
+  if(playing){if(ts-last>${frameDelay}){idx=(idx+1)%frames.length;renderF();last=ts;}}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+<\/script></body></html>`;
+
+  // Download as .html file (opens in any browser as animated replay)
+  const blob = new Blob([htmlContent], {type:'text/html'});
+  const a = document.createElement('a');
+  a.download = 'sketchforge-replay-'+Date.now()+'.html';
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  progress.style.display='none';
+  progressBar.style.width='0%';
+  notify('🎞 Replay downloaded! Open the .html file to watch it.');
+}
+
+// ─── Download replay as WebM video using MediaRecorder ───
+async function downloadReplayMP4(){
+  if(!st.strokes.length){notify('No recording to download');return;}
+
+  const rc=document.getElementById('rCanvas');
+  if(!rc.captureStream){notify('Video export not supported in this browser. Try Chrome or Edge.');return;}
+
+  rState.playing=false;
+  document.getElementById('playBtn').textContent='▶';
+
+  const progress   = document.getElementById('gifProgress');
+  const progressBar= document.getElementById('gifProgressBar');
+  const progressLbl= document.getElementById('gifProgressLabel');
+  progress.style.display='block';
+  progressLbl.textContent='Recording video…';
+  progressBar.style.width='10%';
+
+  const stream   = rc.captureStream(30); // 30fps
+  const recorder = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp9'});
+  const chunks   = [];
+  recorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
+
+  recorder.onstop = ()=>{
+    const blob = new Blob(chunks,{type:'video/webm'});
+    const a = document.createElement('a');
+    a.download = 'sketchforge-replay-'+Date.now()+'.webm';
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    URL.revokeObjectURL(a.href);
+    progress.style.display='none';
+    progressBar.style.width='0%';
+    notify('🎬 Video saved as .webm! Rename to .mp4 if needed.');
+  };
+
+  recorder.start();
+
+  // Play through all frames at high speed into the recorder
+  const fps30delay = 33; // ~30fps
+  const stepSize   = Math.max(1, Math.floor(rState.total/180)); // max ~6s at 30fps
+
+  for(let i=0;i<=rState.total;i+=stepSize){
+    renderRFrame(i);
+    const pct=Math.round((i/rState.total)*100);
+    progressBar.style.width=pct+'%';
+    progressLbl.textContent=`Recording video… ${pct}%`;
+    await new Promise(r=>setTimeout(r,fps30delay));
+  }
+  renderRFrame(rState.total);
+  await new Promise(r=>setTimeout(r,300)); // pause on final frame
+
+  recorder.stop();
+}
 const PROMPTS=['Draw a sunset over mountains','Sketch a flying dragon','Draw your favorite food','A robot in a garden','Draw a city at night','Sketch a magical forest','Draw a cat on a skateboard','A lighthouse in a storm','Draw a cup of coffee','Sketch an astronaut floating','Draw a treehouse','A phoenix rising from flames','Draw waves crashing on rocks','Sketch a cozy winter cabin','A hot air balloon','Draw a butterfly in a jar','Sketch a haunted house','An underwater city','Draw a melting clock','Sketch a castle in clouds','A wolf howling at the moon','Draw a rainbow bridge','Steam-punk bicycle','A flower made of fire'];
 let challengeTimer=null,challengeSecs=300;
 
