@@ -261,6 +261,13 @@ header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;ba
 .vid-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--lime),var(--cyan));border-radius:4px;transition:width .08s;box-shadow:0 0 10px rgba(200,255,0,.5)}
 .vid-pct{font-family:'Bebas Neue',cursive;font-size:2rem;letter-spacing:3px;color:var(--lime);min-width:70px;text-align:center}
 
+/* AUTO-REC INDICATOR */
+.autorec-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--pink);margin-right:4px;animation:recpulse 1s ease-in-out infinite;vertical-align:middle}
+/* BRUSH PRESET PILLS */
+.bpreset{flex:1;padding:4px 2px;background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.45rem;cursor:pointer;text-align:center;transition:all .15s}
+.bpreset:hover{border-color:rgba(168,85,247,.5);color:var(--purple)}
+.bpreset.on{border-color:rgba(168,85,247,.7);color:var(--purple);background:rgba(168,85,247,.12)}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--purple),var(--cyan));border-radius:3px}
 
@@ -381,6 +388,20 @@ header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;ba
     <div class="srow"><label>Opacity</label><input type="range" id="opacS" min="5" max="100" value="100" oninput="onOpac(this.value)"><div class="sv" id="opacV">100%</div></div>
     <div class="trow"><label>Fill Shapes</label><div class="tog" id="fillTog" onclick="togFill()"></div></div>
     <div class="trow"><label>Dashed</label><div class="tog" id="dashTog" onclick="togDash()"></div></div>
+    <div class="trow"><label>Soft Eraser</label><div class="tog" id="softEraserTog" onclick="togSoftEraser()"></div></div>
+    <div class="trow" style="padding-top:6px;border-top:1px solid var(--border);margin-top:4px">
+      <label style="color:var(--pink);font-size:.5rem">⏺ Auto-Record</label>
+      <div class="tog" id="autoRecTog" onclick="togAutoRec()"></div>
+    </div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <div style="font-size:.48rem;color:var(--purple);letter-spacing:1.5px;margin-bottom:5px">✦ Custom Brush</div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap">
+        <div class="bpreset on" id="bp-scatter"  onclick="setCustomBrush('scatter')">Scatter</div>
+        <div class="bpreset"   id="bp-rough"    onclick="setCustomBrush('rough')">Rough</div>
+        <div class="bpreset"   id="bp-fan"      onclick="setCustomBrush('fan')">Fan</div>
+        <div class="bpreset"   id="bp-splatter" onclick="setCustomBrush('splatter')">Splatter</div>
+      </div>
+    </div>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <div class="trow"><label style="color:var(--cyan);font-size:.5rem">✦ Pressure</label><div class="tog on" id="pressureTog" onclick="togPressure()"></div></div>
       <div class="srow"><label>Strength</label><input type="range" id="pressureStrength" min="0.1" max="1" step="0.05" value="0.7" oninput="document.getElementById('psV').textContent=Math.round(this.value*100)+'%'"><div class="sv" id="psV">70%</div></div>
@@ -566,6 +587,9 @@ const st={
   recording:false, strokes:[], currentStroke:null,
   gravityDrops:[], sprayTimer:null,
   pinching:false, lastPinchDist:0,
+  softEraser:false,
+  autoRec:false, autoRecStarted:false,
+  customBrushType:'scatter',
 };
 
 // ═══════════════════════════════════════
@@ -936,6 +960,15 @@ function onDown(e){
   if(st.tool==='eyedropper'){pickColor(pos);st.drawing=false;return;}
   if(st.tool==='text'){saveSnap();addText(pos);st.drawing=false;return;}
   saveSnap();
+  // ── AUTO-RECORD: start recording on first stroke ──
+  if(st.autoRec && !st.recording){
+    st.recording=true; st.strokes=[];
+    document.getElementById('recBar').classList.add('show');
+    document.getElementById('recBtn').classList.add('on');
+    document.getElementById('recBtn').querySelector('span').textContent='Stop';
+    const svBtn=document.getElementById('saveVideoBtn');if(svBtn)svBtn.style.display='none';
+    st.autoRecStarted=true;
+  }
   if(st.recording)st.currentStroke={tool:st.tool,color:st.color,size:st.size,opacity:st.opacity,fill:st.fill,dash:st.dash,points:[{x:pos.x,y:pos.y,t:Date.now()}]};
   if(st.tool==='spray'){sprayAt(pos);st.sprayTimer=setInterval(()=>sprayAt({x:st.lastX,y:st.lastY}),28);return;}
   if(st.tool==='gravity')return;
@@ -999,7 +1032,7 @@ function getPinchDist(){
   const dx=pts[0].x-pts[1].x,dy=pts[0].y-pts[1].y;
   return Math.sqrt(dx*dx+dy*dy);
 }
-function isFree(){return['pen','pencil','brush','marker','eraser','watercolor','calligraphy'].includes(st.tool);}
+function isFree(){return['pen','pencil','brush','marker','eraser','watercolor','calligraphy','blend','custom'].includes(st.tool);}
 function isShape(){return['line','rect','circle','triangle','arrow','star'].includes(st.tool);}
 
 // ═══════════════════════════════════════
@@ -1194,11 +1227,149 @@ function freeStroke(c, pos){
       c.lineCap = 'round';
       break;
 
-    case 'eraser':
-      c.lineWidth = pSize;
-      c.lineTo(pos.x, pos.y);
-      c.stroke();
+    // ── ERASER: hard or soft mode ──
+    case 'eraser':{
+      if(st.softEraser){
+        // Soft eraser — gradient radial dabs along path for feathered edge
+        const steps = Math.max(1, Math.floor(dist / Math.max(1, pSize * 0.25)));
+        for(let i = 0; i <= steps; i++){
+          const t = i / steps;
+          const ex = st.lastX + dx * t, ey = st.lastY + dy * t;
+          const grad = c.createRadialGradient(ex, ey, 0, ex, ey, pSize);
+          grad.addColorStop(0,   'rgba(0,0,0,' + Math.min(1, getPOpac() * 1.2) + ')');
+          grad.addColorStop(0.5, 'rgba(0,0,0,' + getPOpac() * 0.5 + ')');
+          grad.addColorStop(1,   'rgba(0,0,0,0)');
+          c.fillStyle = grad;
+          c.beginPath();
+          c.arc(ex, ey, pSize, 0, Math.PI * 2);
+          c.fill();
+        }
+      } else {
+        // Hard eraser — solid stroke
+        c.lineWidth = pSize;
+        c.lineCap   = 'round';
+        c.lineJoin  = 'round';
+        c.lineTo(pos.x, pos.y);
+        c.stroke();
+      }
       break;
+    }
+
+    // ── BLEND BRUSH: smears & blends existing pixels with colour ──
+    case 'blend':{
+      if(dist < 0.4) break;
+      // Sample a patch of pixels around cursor
+      const sr = Math.max(2, Math.round(pSize * 0.9));
+      const sx = Math.max(0,   Math.round(pos.x) - sr);
+      const sy = Math.max(0,   Math.round(pos.y) - sr);
+      const sw = Math.min(sr * 2, CW - sx);
+      const sh = Math.min(sr * 2, CH - sy);
+      if(sw < 1 || sh < 1) break;
+      let ri = 0, gi = 0, bi = 0, cnt = 0;
+      try {
+        const id = c.getImageData(sx, sy, sw, sh).data;
+        for(let p = 0; p < id.length; p += 4){
+          if(id[p+3] > 10){ ri += id[p]; gi += id[p+1]; bi += id[p+2]; cnt++; }
+        }
+      } catch(e){ break; }
+      if(cnt > 0){ ri = ri/cnt|0; gi = gi/cnt|0; bi = bi/cnt|0; }
+      // Mix sampled colour with current stroke colour
+      const [cr2,cg2,cb2] = hexToRgb(st.color);
+      const bf = Math.min(0.65, pOpac * 0.7);   // blend toward current colour
+      const mr = ((ri * (1-bf) + cr2 * bf)|0);
+      const mg = ((gi * (1-bf) + cg2 * bf)|0);
+      const mb = ((bi * (1-bf) + cb2 * bf)|0);
+      // Smear: paint a soft dab of the blended colour along stroke
+      const smearSteps = Math.max(1, Math.ceil(dist / Math.max(1, pSize * 0.2)));
+      for(let i = 0; i <= smearSteps; i++){
+        const t2 = i / smearSteps;
+        const bx = st.lastX + dx * t2, by = st.lastY + dy * t2;
+        const rr = Math.max(1, pSize * 0.7);
+        const bg3 = c.createRadialGradient(bx, by, 0, bx, by, rr);
+        bg3.addColorStop(0,    `rgba(${mr},${mg},${mb},${pOpac * 0.55})`);
+        bg3.addColorStop(0.65, `rgba(${mr},${mg},${mb},${pOpac * 0.18})`);
+        bg3.addColorStop(1,    `rgba(${mr},${mg},${mb},0)`);
+        c.globalCompositeOperation = 'source-over';
+        c.fillStyle = bg3;
+        c.beginPath();
+        c.arc(bx, by, rr, 0, Math.PI * 2);
+        c.fill();
+      }
+      break;
+    }
+
+    // ── CUSTOM BRUSH: scatter / rough / fan / splatter presets ──
+    case 'custom':{
+      if(dist < 0.2) break;
+      const cType = st.customBrushType;
+
+      if(cType === 'scatter'){
+        // Random dot cloud following stroke
+        const nDots = Math.max(3, Math.round(pSize * 0.6));
+        const spread = pSize * 1.4;
+        for(let i = 0; i < nDots; i++){
+          const t3 = Math.random();
+          const bx = st.lastX + dx * t3 + (Math.random()-0.5)*spread;
+          const by = st.lastY + dy * t3 + (Math.random()-0.5)*spread;
+          const r3 = Math.max(0.5, pSize * (0.08 + Math.random() * 0.22));
+          c.fillStyle = hexA(st.color, pOpac * (0.3 + Math.random() * 0.65));
+          c.beginPath(); c.arc(bx, by, r3, 0, Math.PI*2); c.fill();
+        }
+      }
+      else if(cType === 'rough'){
+        // Rough / textured stroke — multiple offset jittered lines
+        const nLines = Math.max(2, Math.round(pSize * 0.25));
+        for(let i = 0; i < nLines; i++){
+          const jx1 = (Math.random()-0.5)*pSize*0.6, jy1 = (Math.random()-0.5)*pSize*0.6;
+          const jx2 = (Math.random()-0.5)*pSize*0.6, jy2 = (Math.random()-0.5)*pSize*0.6;
+          c.strokeStyle = hexA(st.color, pOpac * (0.2 + Math.random()*0.55));
+          c.lineWidth   = Math.max(0.4, pSize * 0.12 * (0.5 + Math.random()));
+          c.lineCap     = 'round';
+          c.setLineDash([]);
+          c.beginPath();
+          c.moveTo(st.lastX + jx1, st.lastY + jy1);
+          c.lineTo(pos.x  + jx2, pos.y  + jy2);
+          c.stroke();
+        }
+      }
+      else if(cType === 'fan'){
+        // Fan of radiating strokes perpendicular to motion
+        const len2 = Math.max(0.001, dist);
+        const px = -dy/len2, py = dx/len2;  // perp direction
+        const nFan = Math.max(3, Math.round(pSize * 0.3));
+        for(let i = 0; i < nFan; i++){
+          const tt = (i/(nFan-1) - 0.5) * 2;
+          const spread2 = pSize * 0.75 * tt;
+          c.strokeStyle = hexA(st.color, pOpac * (1 - Math.abs(tt) * 0.55));
+          c.lineWidth   = Math.max(0.3, pSize * 0.05);
+          c.lineCap     = 'round';
+          c.setLineDash([]);
+          c.beginPath();
+          c.moveTo(st.lastX + px*spread2, st.lastY + py*spread2);
+          c.lineTo(pos.x   + px*spread2, pos.y   + py*spread2);
+          c.stroke();
+        }
+      }
+      else if(cType === 'splatter'){
+        // Ink splatter — fast-moving streaks radiating outward
+        const nSplat = Math.max(4, Math.round(pSize * 0.7 + dist * 0.3));
+        for(let i = 0; i < nSplat; i++){
+          const angle = Math.random() * Math.PI * 2;
+          const len3  = Math.random() * pSize * 1.8;
+          const startD = Math.random() * pSize * 0.4;
+          const ox = Math.cos(angle), oy = Math.sin(angle);
+          c.strokeStyle = hexA(st.color, pOpac * (0.15 + Math.random()*0.7));
+          c.lineWidth   = Math.max(0.4, pSize * 0.07 * (0.3 + Math.random()));
+          c.lineCap     = 'round';
+          c.setLineDash([]);
+          c.beginPath();
+          c.moveTo(pos.x + ox*startD, pos.y + oy*startD);
+          c.lineTo(pos.x + ox*(startD+len3), pos.y + oy*(startD+len3));
+          c.stroke();
+        }
+      }
+      break;
+    }
   }
 }
 
@@ -1312,6 +1483,8 @@ const TOOLS=[
   {id:'arrow',label:'Arrow',key:'',svg:'<line x1="5" y1="19" x2="19" y2="5"/><polyline points="9,5 19,5 19,15"/>'},
   {id:'star',label:'Star',key:'',svg:'<polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>'},
   {id:'eraser',label:'Eraser',key:'E',svg:'<path d="M20 20H7L3 16l9.5-9.5 7.5 7.5-2.5 2.5"/>'},
+  {id:'blend',label:'Blend',key:'D',svg:'<circle cx="9" cy="9" r="4"/><circle cx="15" cy="15" r="4"/><line x1="9" y1="13" x2="15" y2="11"/>'},
+  {id:'custom',label:'Custom',key:'U',svg:'<path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z"/>'},
   {id:'fill',label:'Fill',key:'F',svg:'<path d="M19 11L8.5 1 3 6.5l10 10.5"/><path d="M20 16c0 2.5-2 4-2 4s-2-1.5-2-4a2 2 0 014 0z"/>'},
   {id:'eyedropper',label:'Pick',key:'I',svg:'<path d="M2 13.5V22h8.5"/><path d="M2 13.5L13.5 2l8.5 8.5-11.5 11.5"/>'},
   {id:'text',label:'Text',key:'X',svg:'<polyline points="4,7 4,4 20,4 20,7"/><line x1="12" y1="4" x2="12" y2="20"/>'},
@@ -1321,7 +1494,7 @@ function setTool(id){st.tool=id;document.querySelectorAll('[data-tool]').forEach
 
 function buildLeftStrip(){
   const strip=document.getElementById('leftStrip');strip.innerHTML='';
-  [['pen','pencil','brush','marker','spray','gravity'],['line','rect','circle','triangle','arrow','star'],['eraser','fill','eyedropper','text']].forEach((g,gi)=>{
+  [['pen','pencil','brush','watercolor','calligraphy','marker','spray','gravity'],['line','rect','circle','triangle','arrow','star'],['eraser','blend','custom','fill','eyedropper','text']].forEach((g,gi)=>{
     if(gi){const s=document.createElement('div');s.className='strip-sep';strip.appendChild(s);}
     g.forEach(id=>{
       const t=TOOLS.find(x=>x.id===id),btn=document.createElement('button');
@@ -1375,6 +1548,31 @@ function onSize(v){st.size=+v;const el=document.getElementById('sizeV');if(el)el
 function onOpac(v){st.opacity=+v;const el=document.getElementById('opacV');if(el)el.textContent=v+'%';}
 function togFill(){st.fill=!st.fill;document.getElementById('fillTog').classList.toggle('on',st.fill);}
 function togDash(){st.dash=!st.dash;document.getElementById('dashTog').classList.toggle('on',st.dash);}
+function togSoftEraser(){
+  st.softEraser=!st.softEraser;
+  document.getElementById('softEraserTog').classList.toggle('on',st.softEraser);
+  notify(st.softEraser?'Soft Eraser ON':'Hard Eraser ON');
+}
+function togAutoRec(){
+  st.autoRec=!st.autoRec;
+  document.getElementById('autoRecTog').classList.toggle('on',st.autoRec);
+  if(st.autoRec){
+    notify('⏺ Auto-Record ON — draws automatically recorded');
+  } else {
+    notify('Auto-Record OFF');
+    // If auto-rec started a session, stop it
+    if(st.autoRecStarted && st.recording){ toggleRec(); st.autoRecStarted=false; }
+  }
+}
+function setCustomBrush(type){
+  st.customBrushType=type;
+  ['scatter','rough','fan','splatter'].forEach(t=>{
+    const el=document.getElementById('bp-'+t);
+    if(el) el.classList.toggle('on', t===type);
+  });
+  setTool('custom');
+  notify('Custom brush: '+type);
+}
 
 // ═══════════════════════════════════════
 // CANVAS OPS
@@ -1642,7 +1840,7 @@ function stopChallenge(timeout){clearInterval(chalTimer);document.getElementById
 // ═══════════════════════════════════════
 document.addEventListener('keydown',e=>{
   if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
-  const km={p:'pen',n:'pencil',b:'brush',w:'watercolor',k:'calligraphy',m:'marker',a:'spray',g:'gravity',l:'line',r:'rect',c:'circle',t:'triangle',e:'eraser',f:'fill',i:'eyedropper',x:'text'};
+  const km={p:'pen',n:'pencil',b:'brush',w:'watercolor',k:'calligraphy',m:'marker',a:'spray',g:'gravity',d:'blend',u:'custom',l:'line',r:'rect',c:'circle',t:'triangle',e:'eraser',f:'fill',i:'eyedropper',x:'text'};
   if(km[e.key.toLowerCase()])setTool(km[e.key.toLowerCase()]);
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.shiftKey?redo():undo();}
   if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();openSaveModal();}
